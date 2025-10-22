@@ -5,7 +5,7 @@ import { DashboardLayout } from "@/components/dashboard-layout"
 import { WebDomainScanner } from "@/components/sections/web-domain-scanner"
 import { CVEScanner } from "@/components/sections/cve-scanner"
 import { DatabaseScanner } from "@/components/sections/database-scanner"
-import { APIDiscovery } from "@/components/sections/api-discovery"
+import { APIChecker } from "@/components/sections/api-tester"
 import { CodeScanner } from "@/components/sections/code-scanner"
 import { Settings } from "@/components/sections/settings"
 import { About } from "@/components/sections/about"
@@ -34,7 +34,7 @@ export default function Home() {
       case "database":
         return <DatabaseScanner domain={domain} />
       case "api":
-        return <APIDiscovery domain={domain} />
+        return <APIChecker domain={domain} />
       case "code":
         return <CodeScanner domain={domain} />
       case "settings":
@@ -49,7 +49,7 @@ export default function Home() {
   return (
     <DashboardLayout
       activeNav={activeNav}
-      onNavChange={setActiveNav}
+      onNavChange={(nav: string) => setActiveNav(nav as NavigationItem)}
       userEmail={userEmail}
       onLogout={() => {
         localStorage.removeItem("userEmail")

@@ -9,7 +9,7 @@ interface APIDiscoveryProps {
   domain: string
 }
 
-export function APIDiscovery({ domain }: APIDiscoveryProps) {
+export function APIChecker({ domain }: APIDiscoveryProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [apiData, setApiData] = useState<{ found: number; unauthenticated: number; sensitiveData: number }>({
     found: 0,
