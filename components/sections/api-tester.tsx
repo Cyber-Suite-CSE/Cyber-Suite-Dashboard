@@ -199,12 +199,15 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
     
     try {
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', file, file.name)
       
       const targetParam = spiderConfig.target ? `?target=${encodeURIComponent(spiderConfig.target)}` : ''
       
       const response = await fetch(`${getApiBaseUrl()}/upload_openapi${targetParam}`, {
         method: 'POST',
+        headers: {
+          // Don't set Content-Type header - let the browser set it with boundary for multipart/form-data
+        },
         body: formData,
       })
 
@@ -298,28 +301,50 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
   }
 
   const applyUrlSelection = async () => {
-    if (!currentContext || selectedUrls.size === 0) return
+    if (!currentContext) {
+      setDiscoveryStatus({
+        message: 'Please create a context first',
+        type: 'error'
+      })
+      return
+    }
+
+    if (selectedUrls.size === 0) {
+      setDiscoveryStatus({
+        message: 'Please select at least one URL first',
+        type: 'warning'
+      })
+      return
+    }
+    
+    // Show loading state
+    setDiscoveryStatus({
+      message: `Applying ${selectedUrls.size} URLs to context...`,
+      type: 'info'
+    })
     
     try {
-      const response = await fetch(`${getApiBaseUrl()}/context/${currentContext.context_name}/apply`, {
+      const response = await fetch(`${getApiBaseUrl()}/context/${currentContext.context_name}/update_urls`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           urls: Array.from(selectedUrls),
-          action: 'add'
         })
       })
       
       if (response.ok) {
+        const result = await response.json()
         setDiscoveryStatus({
-          message: `Applied ${selectedUrls.size} URLs to context for scanning`,
+          message: `✅ Successfully applied ${selectedUrls.size} URLs to context for scanning`,
           type: 'success'
         })
+      } else {
+        throw new Error(`Server responded with ${response.status}: ${response.statusText}`)
       }
     } catch (error) {
       console.error("Error applying selection:", error)
       setDiscoveryStatus({
-        message: 'Failed to apply URL selection',
+        message: `❌ Failed to apply URL selection: ${error instanceof Error ? error.message : 'Unknown error'}`,
         type: 'error'
       })
     }
@@ -491,9 +516,9 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
       <Tabs defaultValue="discovery" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="discovery">Discovery</TabsTrigger>
-          <TabsTrigger value="endpoints" disabled={!currentContext}>URLs</TabsTrigger>
-          <TabsTrigger value="scan" disabled={!currentContext || discoveredUrls.length === 0}>Scan</TabsTrigger>
-          <TabsTrigger value="results" disabled={!currentContext}>Results</TabsTrigger>
+          <TabsTrigger value="endpoints">URLs</TabsTrigger>
+          <TabsTrigger value="scan">Scan</TabsTrigger>
+          <TabsTrigger value="results">Results</TabsTrigger>
         </TabsList>
 
         {/* Discovery Tab */}
@@ -528,7 +553,10 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                       {specFile ? specFile.name : "Drag and drop or click to upload"}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Limit 10MB • JSON, YAML format
+                      {!currentContext 
+                        ? "Create a context first to upload files"
+                        : "Limit 10MB • JSON, YAML format"
+                      }
                     </p>
                   </label>
                 </div>
@@ -638,6 +666,7 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                     variant="outline"
                     size="sm"
                     onClick={() => setSelectedUrls(new Set(discoveredUrls))}
+                    disabled={discoveredUrls.length === 0}
                   >
                     <Eye size={16} className="mr-2" />
                     Select All
@@ -646,6 +675,7 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                     variant="outline"
                     size="sm"
                     onClick={() => setSelectedUrls(new Set())}
+                    disabled={selectedUrls.size === 0}
                   >
                     <EyeOff size={16} className="mr-2" />
                     Deselect All
@@ -662,33 +692,77 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
               </div>
             </CardHeader>
             <CardContent>
-              {discoveredUrls.length === 0 ? (
+              {!currentContext ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Activity size={48} className="mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium">No active context</p>
+                  <p className="text-sm">Please create a context first to manage URLs</p>
+                </div>
+              ) : discoveredUrls.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <Target size={48} className="mx-auto mb-4 opacity-50" />
                   <p className="text-lg font-medium">No URLs discovered yet</p>
-                  <p className="text-sm">Use the Discovery tab to find URLs</p>
+                  <p className="text-sm">Use the Discovery tab to find URLs via file upload or spider crawling</p>
                 </div>
               ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {discoveredUrls.map((url, index) => (
-                    <div
-                      key={index}
-                      className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
-                        selectedUrls.has(url)
-                          ? "bg-card border-border"
-                          : "bg-muted/50 border-muted opacity-60"
-                      }`}
-                    >
-                      <Checkbox
-                        checked={selectedUrls.has(url)}
-                        onCheckedChange={() => toggleUrlSelection(url)}
-                        id={`url-${index}`}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <code className="text-sm font-mono truncate block">{url}</code>
-                      </div>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 size={16} className="text-green-500" />
+                      <span className="text-sm font-medium">URLs found and ready for selection</span>
                     </div>
-                  ))}
+                    <Badge variant="outline" className="text-xs">
+                      {discoveredUrls.length} total
+                    </Badge>
+                  </div>
+                  
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {discoveredUrls.map((url, index) => (
+                      <div
+                        key={index}
+                        className={`flex items-center gap-3 p-3 rounded-lg border transition-all duration-200 hover:shadow-sm ${
+                          selectedUrls.has(url)
+                            ? "bg-accent/5 border-accent/40 shadow-sm"
+                            : "bg-muted/30 border-muted hover:border-border"
+                        }`}
+                      >
+                        <Checkbox
+                          checked={selectedUrls.has(url)}
+                          onCheckedChange={() => toggleUrlSelection(url)}
+                          id={`url-${index}`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <code className="text-sm font-mono truncate block">{url}</code>
+                        </div>
+                        {selectedUrls.has(url) && (
+                          <Badge variant="outline" className="text-xs text-green-600">
+                            Selected
+                          </Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {currentContext && discoveredUrls.length > 0 && (
+                <div className="mt-6 p-4 border rounded-lg bg-card">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-sm">Apply Selection to Context</h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Selected URLs will be configured in the ZAP context for scanning
+                      </p>
+                    </div>
+                    <Button
+                      onClick={applyUrlSelection}
+                      disabled={selectedUrls.size === 0}
+                      className="shrink-0"
+                    >
+                      <CheckCircle2 size={16} className="mr-2" />
+                      Apply {selectedUrls.size > 0 ? `${selectedUrls.size} URLs` : 'Selection'}
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -697,135 +771,159 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
 
         {/* Scan Tab */}
         <TabsContent value="scan" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Scan Configuration */}
+          {!currentContext ? (
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings size={20} className="text-accent" />
-                  Scan Configuration
-                </CardTitle>
-                <CardDescription>Choose scan type and settings</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Scan Mode</label>
-                  <Select value={selectedScanType} onValueChange={(value: 'passive' | 'active') => setSelectedScanType(value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="passive">
-                        <div className="flex items-center gap-2">
-                          <Shield size={16} className="text-green-500" />
-                          <div>
-                            <div className="font-medium">PASSIVE Mode</div>
-                            <div className="text-xs text-muted-foreground">Safe passive scanning only</div>
-                          </div>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="active">
-                        <div className="flex items-center gap-2">
-                          <Bug size={16} className="text-red-500" />
-                          <div>
-                            <div className="font-medium">ACTIVE Mode</div>
-                            <div className="text-xs text-muted-foreground">Active vulnerability testing</div>
-                          </div>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+              <CardContent className="py-12">
+                <div className="text-center text-muted-foreground">
+                  <Activity size={48} className="mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium">No active context</p>
+                  <p className="text-sm">Please create a context first to start scanning</p>
                 </div>
-
-                <div className="p-4 rounded-lg border bg-card">
-                  <div className="flex items-start gap-3">
-                    {selectedScanType === 'passive' ? (
-                      <Shield size={20} className="text-green-500 mt-0.5" />
-                    ) : (
-                      <AlertTriangle size={20} className="text-red-500 mt-0.5" />
-                    )}
+              </CardContent>
+            </Card>
+          ) : selectedUrls.size === 0 ? (
+            <Card>
+              <CardContent className="py-12">
+                <div className="text-center text-muted-foreground">
+                  <Target size={48} className="mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium">No URLs selected</p>
+                  <p className="text-sm">Please select URLs in the URLs tab before scanning</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Scan Configuration */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Settings size={20} className="text-accent" />
+                      Scan Configuration
+                    </CardTitle>
+                    <CardDescription>Choose scan type and settings</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
                     <div>
-                      <h4 className="font-medium text-sm">
-                        {selectedScanType === 'passive' ? 'Passive Mode' : 'Active Mode'}
-                      </h4>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {selectedScanType === 'passive' 
-                          ? 'Performs passive analysis without sending potentially harmful requests. Safe for production environments.'
-                          : 'Performs active security testing including injection attacks. Use only on test environments with proper authorization.'
-                        }
-                      </p>
+                      <label className="text-sm font-medium mb-2 block">Scan Mode</label>
+                      <Select value={selectedScanType} onValueChange={(value: 'passive' | 'active') => setSelectedScanType(value)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="passive">
+                            <div className="flex items-center gap-2">
+                              <Shield size={16} className="text-green-500" />
+                              <div>
+                                <div className="font-medium">PASSIVE Mode</div>
+                                <div className="text-xs text-muted-foreground">Safe passive scanning only</div>
+                              </div>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="active">
+                            <div className="flex items-center gap-2">
+                              <Bug size={16} className="text-red-500" />
+                              <div>
+                                <div className="font-medium">ACTIVE Mode</div>
+                                <div className="text-xs text-muted-foreground">Active vulnerability testing</div>
+                              </div>
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </div>
-                </div>
 
-                <Button
-                  onClick={runScan}
-                  disabled={!currentContext || selectedUrls.size === 0 || isScanning}
-                  className="w-full"
-                  variant={selectedScanType === 'active' ? 'destructive' : 'default'}
-                >
-                  {isScanning ? (
-                    <>
-                      <Loader2 size={16} className="mr-2 animate-spin" />
-                      Scanning...
-                    </>
-                  ) : (
-                    <>
-                      {selectedScanType === 'passive' ? (
-                        <Shield size={16} className="mr-2" />
+                    <div className="p-4 rounded-lg border bg-card">
+                      <div className="flex items-start gap-3">
+                        {selectedScanType === 'passive' ? (
+                          <Shield size={20} className="text-green-500 mt-0.5" />
+                        ) : (
+                          <AlertTriangle size={20} className="text-red-500 mt-0.5" />
+                        )}
+                        <div>
+                          <h4 className="font-medium text-sm">
+                            {selectedScanType === 'passive' ? 'Passive Mode' : 'Active Mode'}
+                          </h4>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {selectedScanType === 'passive' 
+                              ? 'Performs passive analysis without sending potentially harmful requests. Safe for production environments.'
+                              : 'Performs active security testing including injection attacks. Use only on test environments with proper authorization.'
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      onClick={runScan}
+                      disabled={!currentContext || selectedUrls.size === 0 || isScanning}
+                      className="w-full"
+                      variant={selectedScanType === 'active' ? 'destructive' : 'default'}
+                    >
+                      {isScanning ? (
+                        <>
+                          <Loader2 size={16} className="mr-2 animate-spin" />
+                          Scanning...
+                        </>
                       ) : (
-                        <Bug size={16} className="mr-2" />
+                        <>
+                          {selectedScanType === 'passive' ? (
+                            <Shield size={16} className="mr-2" />
+                          ) : (
+                            <Bug size={16} className="mr-2" />
+                          )}
+                          Start {selectedScanType.toUpperCase()} Scan
+                        </>
                       )}
-                      Start {selectedScanType.toUpperCase()} Scan
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
+                    </Button>
+                  </CardContent>
+                </Card>
 
-            {/* Scan Status */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity size={20} className="text-accent" />
-                  Scan Status
-                </CardTitle>
-                <CardDescription>Current scan progress</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span>Scan Type</span>
-                    <Badge variant="outline" className={selectedScanType === 'active' ? 'text-red-500' : 'text-green-500'}>
-                      {selectedScanType.toUpperCase()}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span>Status</span>
-                    <Badge variant="outline" className={
-                      isScanning ? 'text-blue-500' :
-                      alerts.length > 0 ? 'text-green-500' :
-                      'text-gray-500'
-                    }>
-                      {isScanning ? 'RUNNING' : alerts.length > 0 ? 'COMPLETED' : 'READY'}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span>Selected URLs</span>
-                    <span>{selectedUrls.size}</span>
-                  </div>
-                </div>
-                
-                {!isScanning && alerts.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Activity size={48} className="mx-auto mb-4 opacity-50" />
-                    <p>No scan running</p>
-                    <p className="text-xs">Configure and start a scan to see progress</p>
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          </div>
+                {/* Scan Status */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Activity size={20} className="text-accent" />
+                      Scan Status
+                    </CardTitle>
+                    <CardDescription>Current scan progress</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Scan Type</span>
+                        <Badge variant="outline" className={selectedScanType === 'active' ? 'text-red-500' : 'text-green-500'}>
+                          {selectedScanType.toUpperCase()}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Status</span>
+                        <Badge variant="outline" className={
+                          isScanning ? 'text-blue-500' :
+                          alerts.length > 0 ? 'text-green-500' :
+                          'text-gray-500'
+                        }>
+                          {isScanning ? 'RUNNING' : alerts.length > 0 ? 'COMPLETED' : 'READY'}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Selected URLs</span>
+                        <span>{selectedUrls.size}</span>
+                      </div>
+                    </div>
+                    
+                    {!isScanning && alerts.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Activity size={48} className="mx-auto mb-4 opacity-50" />
+                        <p>No scan running</p>
+                        <p className="text-xs">Configure and start a scan to see progress</p>
+                      </div>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          )}
           
           {scanStatus && (
             <div className={`p-4 rounded-lg border ${
@@ -850,14 +948,17 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                     Security Findings
                   </CardTitle>
                   <CardDescription>
-                    {alerts.length} findings found in {selectedScanType.toUpperCase()} scan
+                    {!currentContext 
+                      ? "No active context for results"
+                      : `${alerts.length} findings found in ${selectedScanType.toUpperCase()} scan`
+                    }
                   </CardDescription>
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={fetchAlerts}
-                  disabled={isLoadingAlerts}
+                  disabled={isLoadingAlerts || !currentContext}
                 >
                   {isLoadingAlerts ? (
                     <Loader2 size={16} className="mr-2 animate-spin" />
@@ -869,7 +970,13 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
               </div>
             </CardHeader>
             <CardContent>
-              {isLoadingAlerts ? (
+              {!currentContext ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Activity size={48} className="mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium">No active context</p>
+                  <p className="text-sm">Please create a context and run a scan to see results</p>
+                </div>
+              ) : isLoadingAlerts ? (
                 <div className="text-center py-8">
                   <Loader2 size={32} className="mx-auto mb-4 animate-spin text-muted-foreground" />
                   <p className="text-muted-foreground">Loading security findings...</p>
