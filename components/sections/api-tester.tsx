@@ -13,7 +13,6 @@ import {
   Zap, 
   Loader2, 
   Shield, 
-  Lock, 
   AlertCircle, 
   CheckCircle2, 
   Upload, 
@@ -25,11 +24,13 @@ import {
   Activity,
   Eye,
   EyeOff,
-  Trash2,
   RefreshCw,
   Target,
   Bug,
-  AlertTriangle
+  AlertTriangle,
+  Server,
+  Power,
+  Trash2
 } from "lucide-react"
 
 interface APIDiscoveryProps {
@@ -37,42 +38,39 @@ interface APIDiscoveryProps {
 }
 
 // API Response Types
-interface ContextResponse {
-  success: boolean
-  context_name: string
-  owner: string | null
-  created_at: number
-  message: string
+// New backend API types (flexible where schema is not strict)
+interface ZAPInstanceResponse {
+  instance_id: string
+  port: number
+  api_key: string
+  status: string
+  created_at: string
 }
 
-interface UploadResponse {
-  success: boolean
-  filename: string
-  file_type: string
-  spec_version: string | null
-  discovered_urls: string[]
-  message: string
-  error: string | null
+interface AlertsEnvelope {
+  alerts: any[]
+  count: number
 }
 
-interface AlertResponse {
+interface NormalizedAlert {
   name: string
   risk: string
   confidence: string
-  description: string | null
-  solution: string | null
-  reference: string | null
+  description?: string | null
+  solution?: string | null
+  reference?: string | null
   url: string
-  method: string | null
-  param: string | null
-  attack: string | null
-  evidence: string | null
+  method?: string | null
+  param?: string | null
+  attack?: string | null
+  evidence?: string | null
 }
 
-interface SpiderConfig {
-  target: string
-  wait?: boolean
-  timeout?: number
+interface SpiderRequest {
+  target_url: string
+  max_children?: number | null
+  recurse?: boolean | null
+  context_name?: string | null
 }
 
 interface StatusMessage {
@@ -80,135 +78,75 @@ interface StatusMessage {
   type: 'success' | 'error' | 'info' | 'warning'
 }
 
-interface ScanConfig {
-  enable_all?: boolean
-  scanner_ids?: number[]
-  wait?: boolean
-  timeout?: number
-  context_name?: string
-  target?: string
+interface ScanRequest {
+  target_url: string
+  scan_type: 'active' | 'passive'
+  context_name?: string | null
 }
 
-interface APIScanner {
-  id: string
+interface ScannerInfo {
+  id: string | number
   name: string
-  cweId: string
-  attackStrength: string
-  alertThreshold: string
-  wascId: string
-  enabled: string
-  quality: string
-  status: string
-  policyId: string
-  allDependenciesAvailable: string
-  dependencies: any[]
-}
-
-interface PassiveScanner {
-  id: string
-  name: string
-  alertThreshold: string
-  enabled: string
-  quality: string
-  status: string
+  enabled?: boolean | string
+  quality?: string
+  status?: string
+  alertThreshold?: string
+  attackStrength?: string
+  cweId?: string | number
 }
 
 export function APIChecker({ domain }: APIDiscoveryProps) {
   // Global URL Input
   const [targetUrl, setTargetUrl] = useState<string>(domain || '')
-  
-  // Context Management
-  const [currentContext, setCurrentContext] = useState<ContextResponse | null>(null)
-  const [contextStatus, setContextStatus] = useState<StatusMessage | null>(null)
-  
-  // Discovery State
+
+  // Instance Management
+  const [instances, setInstances] = useState<ZAPInstanceResponse[]>([])
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null)
+  const [isCreatingInstance, setIsCreatingInstance] = useState(false)
+  const [isLoadingInstances, setIsLoadingInstances] = useState(false)
+  const [instanceStatus, setInstanceStatus] = useState<StatusMessage | null>(null)
+
+  // Contexts
+  const [contexts, setContexts] = useState<string[]>([])
+  const [selectedContext, setSelectedContext] = useState<string | null>(null)
+  const [isLoadingContexts, setIsLoadingContexts] = useState(false)
   const [isCreatingContext, setIsCreatingContext] = useState(false)
+  const [newContextName, setNewContextName] = useState<string>("")
+  const [contextStatus, setContextStatus] = useState<StatusMessage | null>(null)
+
+  // Discovery State
   const [isUploading, setIsUploading] = useState(false)
   const [isSpiderRunning, setIsSpiderRunning] = useState(false)
   const [specFile, setSpecFile] = useState<File | null>(null)
   const [discoveredUrls, setDiscoveredUrls] = useState<string[]>([])
   const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set())
   const [discoveryStatus, setDiscoveryStatus] = useState<StatusMessage | null>(null)
-  
+
   // Spider Configuration
-  const [spiderConfig, setSpiderConfig] = useState<SpiderConfig>({
-    target: domain || '',
-    wait: true,
-    timeout: 300
+  const [spiderConfig, setSpiderConfig] = useState<SpiderRequest>({
+    target_url: domain || '',
+    recurse: true,
+    max_children: null,
+    context_name: null,
   })
-  
+  const [spiderScanId, setSpiderScanId] = useState<string | null>(null)
+  const [spiderProgress, setSpiderProgress] = useState<number>(0)
+
   // Scan Management
   const [scanStatus, setScanStatus] = useState<StatusMessage | null>(null)
   const [selectedScanType, setSelectedScanType] = useState<'passive' | 'active'>('passive')
   const [isScanning, setIsScanning] = useState(false)
-  const [selectedScanners, setSelectedScanners] = useState<Set<string>>(new Set())
-  const [selectedPassiveScanners, setSelectedPassiveScanners] = useState<Set<string>>(new Set())
-  
+  const [activeScanId, setActiveScanId] = useState<string | null>(null)
+  const [activeScanProgress, setActiveScanProgress] = useState<number>(0)
+
+  // Scanners (optional management)
+  const [scanners, setScanners] = useState<ScannerInfo[]>([])
+  const [isLoadingScanners, setIsLoadingScanners] = useState(false)
+
   // Results
-  const [alerts, setAlerts] = useState<AlertResponse[]>([])
+  const [alerts, setAlerts] = useState<NormalizedAlert[]>([])
+  const [alertsCount, setAlertsCount] = useState<number>(0)
   const [isLoadingAlerts, setIsLoadingAlerts] = useState(false)
-
-  // Available API Scanners for Active Scanning
-  const availableScanners: APIScanner[] = [
-    { id: "6", name: "Path Traversal", cweId: "22", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "33", enabled: "false", quality: "release", status: "release", policyId: "2", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "7", name: "Remote File Inclusion", cweId: "98", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "5", enabled: "false", quality: "release", status: "release", policyId: "2", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "10045", name: "Source Code Disclosure - /WEB-INF Folder", cweId: "541", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "34", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "20017", name: "Source Code Disclosure - CVE-2012-1823", cweId: "20", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "20018", name: "Remote Code Execution - CVE-2012-1823", cweId: "20", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "20019", name: "External Redirect", cweId: "601", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "38", enabled: "false", quality: "release", status: "release", policyId: "3", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40018", name: "SQL Injection", cweId: "89", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "19", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40019", name: "SQL Injection - MySQL (Time Based)", cweId: "89", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "19", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40020", name: "SQL Injection - Hypersonic SQL (Time Based)", cweId: "89", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "19", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40021", name: "SQL Injection - Oracle (Time Based)", cweId: "89", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "19", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40022", name: "SQL Injection - PostgreSQL (Time Based)", cweId: "89", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "19", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40024", name: "SQL Injection - SQLite (Time Based)", cweId: "89", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "19", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40027", name: "SQL Injection - MsSQL (Time Based)", cweId: "89", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "19", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40043", name: "Log4Shell", cweId: "117", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "3", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40045", name: "Spring4Shell", cweId: "78", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "90019", name: "Server Side Code Injection", cweId: "94", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "90020", name: "Remote OS Command Injection", cweId: "78", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "31", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "90021", name: "XPath Injection", cweId: "643", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "39", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "90023", name: "XML External Entity Attack", cweId: "611", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "43", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "90034", name: "Cloud Metadata Potentially Exposed", cweId: "1230", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "0", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "90035", name: "Server Side Template Injection", cweId: "1336", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "90036", name: "Server Side Template Injection (Blind)", cweId: "1336", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "90037", name: "Remote OS Command Injection (Time Based)", cweId: "78", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "31", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "90017", name: "XSLT Injection", cweId: "91", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "23", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "10058", name: "GET for POST", cweId: "16", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "3", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "50000", name: "Script Active Scan Rules", cweId: "0", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "0", enabled: "false", quality: "release", status: "release", policyId: "3", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "90026", name: "SOAP Action Spoofing", cweId: "451", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "0", enabled: "false", quality: "beta", status: "beta", policyId: "3", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "90029", name: "SOAP XML Injection", cweId: "91", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "0", enabled: "false", quality: "beta", status: "beta", policyId: "3", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40008", name: "Parameter Tampering", cweId: "472", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "0", name: "Directory Browsing", cweId: "548", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "48", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40028", name: "ELMAH Information Leak", cweId: "94", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "14", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40029", name: "Trace.axd Information Leak", cweId: "215", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "13", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40032", name: ".htaccess Information Leak", cweId: "94", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "14", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40034", name: ".env Information Leak", cweId: "215", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "13", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40035", name: "Hidden File Finder", cweId: "538", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "13", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
-    { id: "40042", name: "Spring Actuator Information Leak", cweId: "215", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "13", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] }
-  ]
-
-  // Available Passive Scanners for Safe Scanning
-  const availablePassiveScanners: PassiveScanner[] = [
-    { id: "90030", name: "WSDL File Detection", alertThreshold: "DEFAULT", enabled: "true", quality: "beta", status: "beta" },
-    { id: "10111", name: "Authentication Request Identified", alertThreshold: "DEFAULT", enabled: "true", quality: "beta", status: "beta" },
-    { id: "10112", name: "Session Management Response Identified", alertThreshold: "DEFAULT", enabled: "true", quality: "beta", status: "beta" },
-    { id: "10113", name: "Verification Request Identified", alertThreshold: "DEFAULT", enabled: "true", quality: "beta", status: "beta" },
-    { id: "90022", name: "Application Error Disclosure", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
-    { id: "10015", name: "Re-examine Cache-control Directives", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
-    { id: "10019", name: "Content-Type Header Missing", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
-    { id: "10098", name: "Cross-Domain Misconfiguration", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
-    { id: "10202", name: "Absence of Anti-CSRF Tokens", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
-    { id: "10023", name: "Information Disclosure - Debug Error Messages", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
-    { id: "10024", name: "Information Disclosure - Sensitive Information in URL", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
-    { id: "10025", name: "Information Disclosure - Sensitive Information in HTTP Referrer Header", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
-    { id: "10062", name: "PII Disclosure", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
-    { id: "2", name: "Private IP Disclosure", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
-    { id: "10036", name: "HTTP Server Response Header", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
-    { id: "10035", name: "Strict-Transport-Security Header", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
-    { id: "10021", name: "X-Content-Type-Options Header Missing", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
-    { id: "10037", name: "Server Leaks Information via \"X-Powered-By\" HTTP Response Header Field(s)", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" }
-  ]
 
   // Initialize URLs when domain changes
   useEffect(() => {
@@ -216,7 +154,7 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
       setTargetUrl(domain)
       setSpiderConfig(prev => ({
         ...prev,
-        target: domain
+        target_url: domain
       }))
     }
   }, [domain])
@@ -224,67 +162,138 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
   // API Helper Functions
   const getApiBaseUrl = () => process.env.NEXT_PUBLIC_API_TESTER_URL || "http://localhost:8000"
 
-  // Context Management Functions
+  const apiGet = async (path: string, init?: RequestInit) => {
+    const res = await fetch(`${getApiBaseUrl()}${path}`, { ...init, method: 'GET' })
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+    return res.json()
+  }
+
+  const apiPost = async (path: string, body?: any, init?: RequestInit) => {
+    const res = await fetch(`${getApiBaseUrl()}${path}`, {
+      method: 'POST',
+      headers: body instanceof FormData ? undefined : { 'Content-Type': 'application/json' },
+      body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
+      ...init,
+    })
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+    return res.json()
+  }
+
+  // Instance Management Functions
+  const loadInstances = useCallback(async () => {
+    setIsLoadingInstances(true)
+    try {
+      const raw = await apiGet('/instances')
+      let list: any[] = []
+      if (Array.isArray(raw)) {
+        list = raw
+      } else if (Array.isArray(raw?.instances)) {
+        list = raw.instances
+      } else if (raw && typeof raw === 'object') {
+        // Some backends may return a dict keyed by id
+        const values = Object.values(raw)
+        if (Array.isArray(values) && (values.length === 0 || typeof values[0] === 'object')) {
+          list = values as any[]
+        }
+      }
+      setInstances((list || []) as ZAPInstanceResponse[])
+      // Auto-select first instance if none selected
+      if (!selectedInstanceId && Array.isArray(list) && list.length > 0 && list[0]?.instance_id) {
+        setSelectedInstanceId(list[0].instance_id)
+      }
+    } catch (e) {
+      console.error('Failed to load instances', e)
+      setInstanceStatus({ message: `Failed to load instances: ${e instanceof Error ? e.message : 'Unknown error'}` , type: 'error'})
+    } finally {
+      setIsLoadingInstances(false)
+    }
+  }, [selectedInstanceId])
+
+  useEffect(() => { loadInstances() }, [loadInstances])
+
+  const createInstance = async () => {
+    setIsCreatingInstance(true)
+    setInstanceStatus(null)
+    try {
+      const inst: ZAPInstanceResponse = await apiPost('/instances')
+      setInstances(prev => [inst, ...prev])
+      setSelectedInstanceId(inst.instance_id)
+      setInstanceStatus({ message: `Instance created (${inst.instance_id})`, type: 'success' })
+    } catch (e) {
+      console.error('Create instance failed', e)
+      setInstanceStatus({ message: `Failed to create instance: ${e instanceof Error ? e.message : 'Unknown error'}`, type: 'error' })
+    } finally {
+      setIsCreatingInstance(false)
+    }
+  }
+
+  const deleteInstance = async (instanceId: string) => {
+    try {
+      await fetch(`${getApiBaseUrl()}/instances/${instanceId}`, { method: 'DELETE' })
+      setInstances(prev => prev.filter(i => i.instance_id !== instanceId))
+      if (selectedInstanceId === instanceId) {
+        setSelectedInstanceId(null)
+        setContexts([])
+        setSelectedContext(null)
+        setDiscoveredUrls([])
+        setSelectedUrls(new Set())
+        setAlerts([])
+      }
+      setInstanceStatus({ message: `Instance ${instanceId} deleted`, type: 'info' })
+    } catch (e) {
+      console.error('Delete instance failed', e)
+      setInstanceStatus({ message: `Failed to delete instance: ${e instanceof Error ? e.message : 'Unknown error'}`, type: 'error' })
+    }
+  }
+
+  // Context Management Functions (per instance)
+  const loadContexts = useCallback(async () => {
+    if (!selectedInstanceId) return
+    setIsLoadingContexts(true)
+    try {
+      const data = await apiGet(`/instances/${selectedInstanceId}/contexts`)
+      // Accept array of strings or array of objects with name
+      const list: string[] = Array.isArray(data) ? data : (data?.contexts || [])
+      setContexts(list)
+      if (!selectedContext && list.length > 0) setSelectedContext(list[0])
+    } catch (e) {
+      console.error('Failed to load contexts', e)
+      setContexts([])
+    } finally {
+      setIsLoadingContexts(false)
+    }
+  }, [selectedInstanceId, selectedContext])
+
+  useEffect(() => { loadContexts() }, [loadContexts])
+
   const createContext = async () => {
+    if (!selectedInstanceId || !newContextName.trim()) return
     setIsCreatingContext(true)
     setContextStatus(null)
     try {
-      const response = await fetch(`${getApiBaseUrl()}/context/new`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name_hint: `api-scan-${Date.now()}`,
-          owner_id: `user-${Date.now()}`,
-          target_url: targetUrl
-        })
+      await apiPost(`/instances/${selectedInstanceId}/context`, {
+        context_name: newContextName.trim(),
+        include_regex: [],
+        exclude_regex: [],
       })
-
-      if (!response.ok) {
-        throw new Error(`Failed to create context: ${response.statusText}`)
-      }
-
-      const context: ContextResponse = await response.json()
-      setCurrentContext(context)
-      setContextStatus({
-        message: `Context created successfully (${context.context_name})`,
-        type: 'success'
-      })
-    } catch (error) {
-      console.error("Error creating context:", error)
-      setContextStatus({
-        message: `Failed to create context: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        type: 'error'
-      })
+      setContextStatus({ message: `Context created (${newContextName})`, type: 'success' })
+      setNewContextName('')
+      await loadContexts()
+    } catch (e) {
+      console.error('Create context failed', e)
+      setContextStatus({ message: `Failed to create context: ${e instanceof Error ? e.message : 'Unknown error'}`, type: 'error' })
     } finally {
       setIsCreatingContext(false)
     }
   }
 
-  const deleteContext = async () => {
-    if (!currentContext) return
-    
-    try {
-      await fetch(`${getApiBaseUrl()}/context/${currentContext.context_name}`, {
-        method: 'DELETE'
-      })
-      
-      setCurrentContext(null)
-      setDiscoveredUrls([])
-      setSelectedUrls(new Set())
-      setAlerts([])
-      setContextStatus({
-        message: 'Context deleted successfully',
-        type: 'info'
-      })
-    } catch (error) {
-      console.error("Error deleting context:", error)
-    }
-  }
+  // Context Management Functions
+  // (No explicit delete context endpoint in spec) — skipping
 
   // Discovery Functions
   const handleFileUpload = async (file: File) => {
-    if (!currentContext) {
-      setDiscoveryStatus({ message: 'Please create a context first', type: 'error' })
+    if (!selectedInstanceId) {
+      setDiscoveryStatus({ message: 'Please create/select an instance first', type: 'error' })
       return
     }
 
@@ -295,29 +304,14 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
     try {
       const formData = new FormData()
       formData.append('file', file, file.name)
-      
-      const targetParam = spiderConfig.target ? `?target=${encodeURIComponent(spiderConfig.target)}` : ''
-      
-      const response = await fetch(`${getApiBaseUrl()}/upload_openapi${targetParam}`, {
-        method: 'POST',
-        headers: {
-          // Don't set Content-Type header - let the browser set it with boundary for multipart/form-data
-        },
-        body: formData,
-      })
 
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`)
-      }
+      await apiPost(`/instances/${selectedInstanceId}/openapi`, formData)
 
-      const uploadResult: UploadResponse = await response.json()
-      const urls = Array.isArray(uploadResult.discovered_urls) ? uploadResult.discovered_urls : []
-      setDiscoveredUrls(urls)
-      
       setDiscoveryStatus({
-        message: `Successfully uploaded! Discovered ${urls.length} endpoints.`,
+        message: `OpenAPI uploaded successfully. Refreshing URLs...`,
         type: 'success'
       })
+      await fetchUrls()
     } catch (error) {
       console.error("Error uploading spec file:", error)
       setDiscoveryStatus({
@@ -330,38 +324,38 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
   }
 
   const handleRunSpider = async () => {
-    if (!currentContext || !spiderConfig.target) {
+    if (!selectedInstanceId || !spiderConfig.target_url) {
       setDiscoveryStatus({ 
-        message: 'Please create a context and enter a target URL first', 
+        message: 'Please select an instance and enter a target URL first', 
         type: 'error' 
       })
       return
     }
-    
+
     setIsSpiderRunning(true)
     setDiscoveryStatus({ message: 'Starting spider crawl...', type: 'info' })
-    
-    try {
-      const response = await fetch(`${getApiBaseUrl()}/spider`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(spiderConfig),
-      })
+    setSpiderProgress(0)
 
-      if (!response.ok) {
-        throw new Error(`Spider failed: ${response.statusText}`)
+    try {
+      const payload: SpiderRequest = {
+        target_url: spiderConfig.target_url,
+        context_name: selectedContext || undefined,
+        recurse: spiderConfig.recurse ?? true,
+        max_children: spiderConfig.max_children ?? null,
+      }
+      const data = await apiPost(`/instances/${selectedInstanceId}/spider`, payload)
+      const sid = data?.scan_id || data?.scanId || data?.id || data?.scan || null
+      setSpiderScanId(sid)
+      setDiscoveryStatus({ message: sid ? `Spider started (scan: ${sid}). Monitoring progress...` : 'Spider started. Monitoring progress...', type: 'info' })
+
+      // Poll status
+      if (sid) {
+        await pollSpiderStatus(sid)
       }
 
-      const data = await response.json()
-      
-      // Fetch discovered URLs after spider completes
+      // Fetch URLs after completion
       await fetchUrls()
-      
-      setDiscoveryStatus({
-        message: `Spider completed! Check endpoints tab for discovered URLs.`,
-        type: 'success'
-      })
-      
+      setDiscoveryStatus({ message: 'Spider completed! Check URLs tab for discovered endpoints.', type: 'success' })
     } catch (error) {
       console.error("Error running spider:", error)
       setDiscoveryStatus({
@@ -373,19 +367,40 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
     }
   }
 
+  const pollSpiderStatus = async (scanId: string) => {
+    if (!selectedInstanceId) return
+    let done = false
+    const start = Date.now()
+    while (!done) {
+      await new Promise(r => setTimeout(r, 1500))
+      try {
+        const status = await apiGet(`/instances/${selectedInstanceId}/spider/${scanId}/status`)
+        // Accept percent, progress, or status string
+        const percent = Number(status?.progress ?? status?.percentage ?? status?.percent ?? 0)
+        if (!Number.isNaN(percent)) setSpiderProgress(Math.max(0, Math.min(100, percent)))
+        const state = String(status?.status || '').toLowerCase()
+        if (percent >= 100 || ['done','complete','completed','finished'].includes(state)) {
+          done = true
+          break
+        }
+        if (Date.now() - start > 15 * 60 * 1000) { // 15 minutes safety
+          setDiscoveryStatus({ message: 'Spider polling timed out after 15 minutes', type: 'warning' })
+          break
+        }
+      } catch (e) {
+        console.error('Spider status polling error', e)
+        break
+      }
+    }
+  }
+
   // URL Management Functions
   const fetchUrls = async () => {
+    if (!selectedInstanceId) return
     try {
-      const response = await fetch(`${getApiBaseUrl()}/urls`)
-      if (response.ok) {
-        const responseData = await response.json()
-        // Handle both direct array and object with urls property
-        const urlsData: string[] = responseData.urls || responseData
-        setDiscoveredUrls(Array.isArray(urlsData) ? urlsData : [])
-      } else {
-        console.error("Failed to fetch URLs:", response.statusText)
-        setDiscoveredUrls([])
-      }
+      const responseData = await apiGet(`/instances/${selectedInstanceId}/urls`)
+      const urlsData: string[] = responseData?.urls || responseData || []
+      setDiscoveredUrls(Array.isArray(urlsData) ? urlsData : [])
     } catch (error) {
       console.error("Error fetching URLs:", error)
       setDiscoveredUrls([])
@@ -403,183 +418,159 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
   }
 
   const applyUrlSelection = async () => {
-    if (!currentContext) {
-      setDiscoveryStatus({
-        message: 'Please create a context first',
-        type: 'error'
-      })
-      return
-    }
-
     if (selectedUrls.size === 0) {
-      setDiscoveryStatus({
-        message: 'Please select at least one URL first',
-        type: 'warning'
-      })
+      setDiscoveryStatus({ message: 'Please select at least one URL first', type: 'warning' })
       return
     }
-    
-    // Show loading state
-    setDiscoveryStatus({
-      message: `Applying ${selectedUrls.size} URLs to context...`,
-      type: 'info'
-    })
-    
-    try {
-      const response = await fetch(`${getApiBaseUrl()}/context/${currentContext.context_name}/update_urls`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          urls: Array.from(selectedUrls),
-        })
-      })
-      
-      if (response.ok) {
-        const result = await response.json()
-        setDiscoveryStatus({
-          message: `✅ Successfully applied ${selectedUrls.size} URLs to context for scanning`,
-          type: 'success'
-        })
-      } else {
-        throw new Error(`Server responded with ${response.status}: ${response.statusText}`)
-      }
-    } catch (error) {
-      console.error("Error applying selection:", error)
-      setDiscoveryStatus({
-        message: `❌ Failed to apply URL selection: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        type: 'error'
-      })
-    }
+    setDiscoveryStatus({ message: `Selected ${selectedUrls.size} URLs for scanning/filtering.`, type: 'success' })
   }
 
   // Scan Management Functions
   const runScan = async () => {
-    if (!currentContext) {
-      setScanStatus({ message: 'Please create a context first', type: 'error' })
+    if (!selectedInstanceId) {
+      setScanStatus({ message: 'Please create/select an instance first', type: 'error' })
       return
     }
-
-    if (selectedUrls.size === 0) {
-      setScanStatus({ message: 'Please select at least one URL for scanning', type: 'error' })
+    if (!targetUrl.trim()) {
+      setScanStatus({ message: 'Please enter a target URL', type: 'error' })
       return
     }
-
-    // First apply the URL selection to the context
-    await applyUrlSelection()
 
     setIsScanning(true)
-    setScanStatus({
-      message: `Starting ${selectedScanType} scan...`,
-      type: 'info'
-    })
+    setActiveScanProgress(0)
+    setScanStatus({ message: `Starting ${selectedScanType.toUpperCase()} scan...`, type: 'info' })
 
     try {
-      const scanConfig: ScanConfig = {
-        wait: true,
-        timeout: 300,
-        context_name: currentContext.context_name,
-        target: targetUrl
+      const payload: ScanRequest = {
+        target_url: targetUrl.trim(),
+        scan_type: selectedScanType,
+        context_name: selectedContext || null,
+      }
+      const data = await apiPost(`/instances/${selectedInstanceId}/scan/active`, payload)
+      const sid = data?.scan_id || data?.scanId || data?.id || data?.scan || null
+      setActiveScanId(sid)
+
+      if (sid) {
+        await pollActiveScanStatus(sid)
       }
 
-      // For active scans, include scanner selection
-      if (selectedScanType === 'active') {
-        if (selectedScanners.size === 0) {
-          setScanStatus({ message: 'Please select at least one scanner for active scanning', type: 'error' })
-          setIsScanning(false)
-          return
-        }
-        scanConfig.enable_all = false
-        scanConfig.scanner_ids = Array.from(selectedScanners).map(id => parseInt(id))
-      } else {
-        // For passive scans, include scanner selection or enable all if none selected
-        if (selectedPassiveScanners.size === 0) {
-          scanConfig.enable_all = true
-        } else {
-          scanConfig.enable_all = false
-          scanConfig.scanner_ids = Array.from(selectedPassiveScanners).map(id => parseInt(id))
-        }
-      }
-
-      const endpoint = selectedScanType === 'passive' ? '/passive_scan' : '/active_scan'
-      const response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(scanConfig)
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to start scan: ${response.statusText}`)
-      }
-
-      setScanStatus({
-        message: `${selectedScanType.toUpperCase()} scan completed successfully`,
-        type: 'success'
-      })
-
-      // Fetch alerts after scan completes
+      setScanStatus({ message: `${selectedScanType.toUpperCase()} scan completed`, type: 'success' })
       await fetchAlerts()
     } catch (error) {
       console.error("Error running scan:", error)
-      setScanStatus({
-        message: `Failed to run scan: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        type: 'error'
-      })
+      setScanStatus({ message: `Failed to run scan: ${error instanceof Error ? error.message : 'Unknown error'}`, type: 'error' })
     } finally {
       setIsScanning(false)
     }
   }
 
+  const pollActiveScanStatus = async (scanId: string) => {
+    if (!selectedInstanceId) return
+    let done = false
+    const start = Date.now()
+    while (!done) {
+      await new Promise(r => setTimeout(r, 1500))
+      try {
+        const status = await apiGet(`/instances/${selectedInstanceId}/scan/active/${scanId}/status`)
+        const percent = Number(status?.progress ?? status?.percentage ?? status?.percent ?? 0)
+        if (!Number.isNaN(percent)) setActiveScanProgress(Math.max(0, Math.min(100, percent)))
+        const state = String(status?.status || '').toLowerCase()
+        if (percent >= 100 || ['done','complete','completed','finished'].includes(state)) {
+          done = true
+          break
+        }
+        if (Date.now() - start > 30 * 60 * 1000) { // 30 minutes safety
+          setScanStatus({ message: 'Scan polling timed out after 30 minutes', type: 'warning' })
+          break
+        }
+      } catch (e) {
+        console.error('Active scan status polling error', e)
+        break
+      }
+    }
+  }
+
+  const normalizeAlert = (a: any): NormalizedAlert => ({
+    name: a?.name || a?.alert || a?.title || 'Alert',
+    risk: a?.risk || a?.riskdesc || a?.riskDesc || 'Informational',
+    confidence: a?.confidence || a?.confidencedesc || a?.confidenceDesc || 'Medium',
+    description: a?.description ?? a?.desc ?? null,
+    solution: a?.solution ?? null,
+    reference: a?.reference ?? null,
+    url: a?.url || a?.uri || a?.endpoint || '',
+    method: a?.method ?? null,
+    param: a?.param ?? null,
+    attack: a?.attack ?? null,
+    evidence: a?.evidence ?? null,
+  })
+
   const fetchAlerts = async () => {
+    if (!selectedInstanceId) return
     setIsLoadingAlerts(true)
     try {
-      const response = await fetch(`${getApiBaseUrl()}/alerts`)
-      if (response.ok) {
-        const alertsData: AlertResponse[] = await response.json()
-        setAlerts(alertsData)
-      }
+      const qs = new URLSearchParams()
+      if (targetUrl.trim()) qs.set('baseurl', targetUrl.trim())
+      qs.set('start', '0')
+      qs.set('count', '500')
+      const data: AlertsEnvelope = await apiGet(`/instances/${selectedInstanceId}/alerts?${qs.toString()}`)
+      const list = (data?.alerts || []) as any[]
+      setAlerts(list.map(normalizeAlert))
+      setAlertsCount(Number(data?.count || list.length))
     } catch (error) {
       console.error("Error fetching alerts:", error)
+      setAlerts([])
+      setAlertsCount(0)
     } finally {
       setIsLoadingAlerts(false)
     }
   }
 
-  // Scanner Management Functions
-  const toggleScannerSelection = (scannerId: string) => {
-    const newSelection = new Set(selectedScanners)
-    if (newSelection.has(scannerId)) {
-      newSelection.delete(scannerId)
-    } else {
-      newSelection.add(scannerId)
+  // Scanners Management (enable/disable globally in instance)
+  const loadScanners = useCallback(async () => {
+    if (!selectedInstanceId) return
+    setIsLoadingScanners(true)
+    try {
+      const data = await apiGet(`/instances/${selectedInstanceId}/scan/scanners`)
+      const list: ScannerInfo[] = (data?.scanners || data || []).map((s: any) => ({
+        id: s.id ?? s.scannerId ?? s.ruleId ?? s?.scanRuleId ?? 'unknown',
+        name: s.name || s.rule || 'Scanner',
+        enabled: (typeof s.enabled === 'string') ? (s.enabled.toLowerCase() === 'true') : !!s.enabled,
+        quality: s.quality,
+        status: s.status,
+        alertThreshold: s.alertThreshold,
+        attackStrength: s.attackStrength,
+        cweId: s.cweId ?? s.cwe ?? undefined,
+      }))
+      setScanners(list)
+    } catch (e) {
+      console.error('Failed to load scanners', e)
+      setScanners([])
+    } finally {
+      setIsLoadingScanners(false)
     }
-    setSelectedScanners(newSelection)
-  }
+  }, [selectedInstanceId])
 
-  const selectAllScanners = () => {
-    setSelectedScanners(new Set(availableScanners.map(s => s.id)))
-  }
+  useEffect(() => { loadScanners() }, [loadScanners])
 
-  const deselectAllScanners = () => {
-    setSelectedScanners(new Set())
-  }
-
-  // Passive Scanner Management Functions
-  const togglePassiveScannerSelection = (scannerId: string) => {
-    const newSelection = new Set(selectedPassiveScanners)
-    if (newSelection.has(scannerId)) {
-      newSelection.delete(scannerId)
-    } else {
-      newSelection.add(scannerId)
+  const setScannerEnabled = async (scannerId: string | number, enable: boolean) => {
+    if (!selectedInstanceId) return
+    try {
+      await apiPost(`/instances/${selectedInstanceId}/scan/scanners/${scannerId}/${enable ? 'enable' : 'disable'}`)
+      setScanners(prev => prev.map(s => s.id === scannerId ? { ...s, enabled: enable } : s))
+    } catch (e) {
+      console.error('Failed to toggle scanner', e)
     }
-    setSelectedPassiveScanners(newSelection)
   }
 
-  const selectAllPassiveScanners = () => {
-    setSelectedPassiveScanners(new Set(availablePassiveScanners.map(s => s.id)))
-  }
-
-  const deselectAllPassiveScanners = () => {
-    setSelectedPassiveScanners(new Set())
+  const enablePassiveScanning = async () => {
+    if (!selectedInstanceId) return
+    try {
+      await apiPost(`/instances/${selectedInstanceId}/passive-scan/enable`)
+      setScanStatus({ message: 'Passive scanning enabled', type: 'success' })
+    } catch (e) {
+      console.error('Enable passive scanning failed', e)
+      setScanStatus({ message: 'Failed to enable passive scanning', type: 'error' })
+    }
   }
 
   // Helper Functions
@@ -594,10 +585,10 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
   }
 
   const getStatusMessage = () => {
-    if (!currentContext) return { message: 'No active context', type: 'info' as const }
-    if (isScanning) return { message: `${selectedScanType.toUpperCase()} scan in progress...`, type: 'info' as const }
+    if (!selectedInstanceId) return { message: 'No active ZAP instance', type: 'info' as const }
+    if (isScanning) return { message: `${selectedScanType.toUpperCase()} scan in progress (${activeScanProgress}%)...`, type: 'info' as const }
     if (alerts.length > 0) return { message: `Scan completed with ${alerts.length} findings`, type: 'success' as const }
-    return { message: 'Ready to scan', type: 'info' as const }
+    return { message: 'Ready', type: 'info' as const }
   }
 
   return (
@@ -607,6 +598,98 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
         <h1 className="text-3xl font-bold text-foreground mb-2">API Security Scanner</h1>
         <p className="text-muted-foreground">Discover, analyze, and test API security with OWASP ZAP</p>
       </div>
+
+      {/* Instance Management */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Server size={20} className="text-accent" />
+            Instance Management
+          </CardTitle>
+          <CardDescription>Each user runs an isolated ZAP instance</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-3 h-3 rounded-full ${
+                selectedInstanceId ? 'bg-green-500' : 'bg-gray-400'
+              }`} />
+              <span className="text-sm font-medium">
+                {selectedInstanceId 
+                  ? `Active Instance (${selectedInstanceId})` 
+                  : 'No active instance'}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={createInstance} disabled={isCreatingInstance}>
+                {isCreatingInstance ? (
+                  <>
+                    <Loader2 size={16} className="mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Power size={16} className="mr-2" />
+                    Create Instance
+                  </>
+                )}
+              </Button>
+              {selectedInstanceId && (
+                <Button variant="outline" onClick={() => deleteInstance(selectedInstanceId)}>
+                  <Trash2 size={16} className="mr-2" />
+                  Delete Active
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {instanceStatus && (
+            <div className={`p-3 rounded-lg border ${
+              instanceStatus.type === 'success' ? 'bg-green-500/5 border-green-500/20 text-green-500' :
+              instanceStatus.type === 'error' ? 'bg-red-500/5 border-red-500/20 text-red-500' :
+              'bg-blue-500/5 border-blue-500/20 text-blue-500'
+            }`}>
+              <p className="text-sm">{instanceStatus.message}</p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Instances</span>
+              <Badge variant="outline" className="text-xs">{Array.isArray(instances) ? instances.length : 0}</Badge>
+            </div>
+            {isLoadingInstances ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 size={16} className="animate-spin" /> Loading instances...
+              </div>
+            ) : !Array.isArray(instances) || instances.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No instances yet. Create one to get started.</div>
+            ) : (
+              <div className="max-h-48 overflow-y-auto space-y-2">
+                {(Array.isArray(instances) ? instances : []).map((inst) => (
+                  <div key={inst.instance_id} className={`flex items-center justify-between p-2 rounded border ${selectedInstanceId === inst.instance_id ? 'bg-accent/5 border-accent/40' : 'bg-background border-border'}`}>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">{inst.status}</Badge>
+                        <code className="text-xs truncate">{inst.instance_id}</code>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">Port: {inst.port}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      {selectedInstanceId !== inst.instance_id && (
+                        <Button size="sm" variant="outline" onClick={() => setSelectedInstanceId(inst.instance_id)}>Select</Button>
+                      )}
+                      <Button size="sm" variant="outline" onClick={() => deleteInstance(inst.instance_id)}>
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Global Target URL */}
       <Card>
@@ -622,8 +705,8 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
             value={targetUrl}
             onChange={(e) => {
               setTargetUrl(e.target.value)
-              // Also update spider config to keep them in sync
-              setSpiderConfig(prev => ({ ...prev, target: e.target.value }))
+              // Keep spider config in sync
+              setSpiderConfig(prev => ({ ...prev, target_url: e.target.value }))
             }}
             placeholder="https://api.example.com"
             className="text-sm"
@@ -638,71 +721,68 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
             <Activity size={20} className="text-accent" />
             Context Management
           </CardTitle>
-          <CardDescription>Manage your ZAP scanning context</CardDescription>
+          <CardDescription>Organize scan scope and include/exclude rules</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`w-3 h-3 rounded-full ${
-                currentContext ? 'bg-green-500' : 'bg-gray-400'
-              }`} />
-              <span className="text-sm font-medium">
-                {currentContext 
-                  ? `Context Active (${currentContext.context_name})` 
-                  : 'No active context'
-                }
-              </span>
-            </div>
-            <div className="flex gap-2">
-              {!currentContext ? (
-                <Button
-                  onClick={createContext}
-                  disabled={isCreatingContext || !targetUrl.trim()}
-                  title={!targetUrl.trim() ? "Please enter a target URL above first" : ""}
-                >
-                  {isCreatingContext ? (
-                    <>
-                      <Loader2 size={16} className="mr-2 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <Play size={16} className="mr-2" />
-                      Create Context
-                    </>
-                  )}
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  onClick={deleteContext}
-                >
-                  <X size={16} className="mr-2" />
-                  End Context
-                </Button>
-              )}
-            </div>
-          </div>
-          
-          {!currentContext && !targetUrl.trim() && (
+          {!selectedInstanceId ? (
             <div className="p-3 rounded-lg border border-orange-500/20 bg-orange-500/5">
               <div className="flex items-center gap-2">
                 <AlertCircle size={16} className="text-orange-500" />
                 <p className="text-sm text-orange-500 font-medium">
-                  Please enter a target URL above to create a context
+                  Create/select an instance above to manage contexts
                 </p>
               </div>
             </div>
-          )}
-          
-          {contextStatus && (
-            <div className={`p-4 rounded-lg border ${
-              contextStatus.type === 'success' ? 'bg-green-500/5 border-green-500/20 text-green-500' :
-              contextStatus.type === 'error' ? 'bg-red-500/5 border-red-500/20 text-red-500' :
-              'bg-blue-500/5 border-blue-500/20 text-blue-500'
-            }`}>
-              <p className="text-sm">{contextStatus.message}</p>
-            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2">
+                  <label className="text-sm font-medium">New Context Name</label>
+                  <Input value={newContextName} onChange={(e) => setNewContextName(e.target.value)} placeholder="e.g. prod-scope" />
+                </div>
+                <div className="flex items-end">
+                  <Button onClick={createContext} disabled={isCreatingContext || !newContextName.trim()} className="w-full">
+                    {isCreatingContext ? (
+                      <><Loader2 size={16} className="mr-2 animate-spin" /> Creating...</>
+                    ) : (
+                      <><Play size={16} className="mr-2" /> Create Context</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Available Contexts</label>
+                <div className="mt-2 max-h-40 overflow-y-auto space-y-2">
+                  {isLoadingContexts ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 size={16} className="animate-spin" /> Loading contexts...
+                    </div>
+                  ) : contexts.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No contexts yet</div>
+                  ) : (
+                    contexts.map((ctx) => (
+                      <div key={ctx} className={`flex items-center justify-between p-2 rounded border ${selectedContext === ctx ? 'bg-accent/5 border-accent/40' : 'bg-background border-border'}`}>
+                        <code className="text-xs truncate">{ctx}</code>
+                        {selectedContext !== ctx && (
+                          <Button size="sm" variant="outline" onClick={() => setSelectedContext(ctx)}>Use</Button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {contextStatus && (
+                <div className={`p-4 rounded-lg border ${
+                  contextStatus.type === 'success' ? 'bg-green-500/5 border-green-500/20 text-green-500' :
+                  contextStatus.type === 'error' ? 'bg-red-500/5 border-red-500/20 text-red-500' :
+                  'bg-blue-500/5 border-blue-500/20 text-blue-500'
+                }`}>
+                  <p className="text-sm">{contextStatus.message}</p>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -730,7 +810,7 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-accent transition-colors cursor-pointer">
-                  <input
+                    <input
                     type="file"
                     accept=".json,.yaml,.yml"
                     onChange={(e) => {
@@ -740,16 +820,16 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                     }}
                     className="hidden"
                     id="spec-upload"
-                    disabled={!currentContext || isUploading}
+                    disabled={!selectedInstanceId || isUploading}
                   />
-                  <label htmlFor="spec-upload" className={`cursor-pointer block ${!currentContext ? 'opacity-50' : ''}`}>
+                  <label htmlFor="spec-upload" className={`cursor-pointer block ${!selectedInstanceId ? 'opacity-50' : ''}`}>
                     <Upload size={24} className="mx-auto mb-2 text-accent" />
                     <p className="text-sm font-medium">
                       {specFile ? specFile.name : "Drag and drop or click to upload"}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {!currentContext 
-                        ? "Create a context first to upload files"
+                      {!selectedInstanceId 
+                        ? "Create/select an instance first to upload files"
                         : "Limit 10MB • JSON, YAML format"
                       }
                     </p>
@@ -779,31 +859,27 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                   <div>
                     <label className="text-sm font-medium">Target URL</label>
                     <Input 
-                      value={spiderConfig.target}
-                      onChange={(e) => setSpiderConfig(prev => ({ ...prev, target: e.target.value }))}
+                      value={spiderConfig.target_url || ''}
+                      onChange={(e) => setSpiderConfig(prev => ({ ...prev, target_url: e.target.value }))}
                       placeholder="https://example.com"
-                      disabled={!currentContext || isSpiderRunning}
+                      disabled={!selectedInstanceId || isSpiderRunning}
                     />
                   </div>
-                  
                   <div>
-                    <label className="text-sm font-medium">Timeout (seconds)</label>
+                    <label className="text-sm font-medium">Max Children (optional)</label>
                     <Select
-                      value={spiderConfig.timeout?.toString()}
-                      onValueChange={(value) => setSpiderConfig(prev => ({ 
-                        ...prev, 
-                        timeout: parseInt(value) 
-                      }))}
-                      disabled={!currentContext || isSpiderRunning}
+                      value={spiderConfig.max_children === null || spiderConfig.max_children === undefined ? 'none' : String(spiderConfig.max_children)}
+                      onValueChange={(value) => setSpiderConfig(prev => ({ ...prev, max_children: value === 'none' ? null : parseInt(value) }))}
+                      disabled={!selectedInstanceId || isSpiderRunning}
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="60">1 minute</SelectItem>
-                        <SelectItem value="300">5 minutes</SelectItem>
-                        <SelectItem value="600">10 minutes</SelectItem>
-                        <SelectItem value="900">15 minutes</SelectItem>
+                        <SelectItem value="none">No limit</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="100">100</SelectItem>
+                        <SelectItem value="500">500</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -811,7 +887,7 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                 
                 <Button
                   onClick={handleRunSpider}
-                  disabled={!currentContext || !spiderConfig.target || isSpiderRunning}
+                  disabled={!selectedInstanceId || !spiderConfig.target_url || isSpiderRunning}
                   className="w-full"
                 >
                   {isSpiderRunning ? (
@@ -826,6 +902,9 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                     </>
                   )}
                 </Button>
+                {isSpiderRunning && (
+                  <div className="text-xs text-muted-foreground">Progress: {spiderProgress}%</div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -887,11 +966,11 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
               </div>
             </CardHeader>
             <CardContent>
-              {!currentContext ? (
+              {!selectedInstanceId ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <Activity size={48} className="mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium">No active context</p>
-                  <p className="text-sm">Please create a context first to manage URLs</p>
+                  <p className="text-lg font-medium">No active instance</p>
+                  <p className="text-sm">Please create/select an instance first to manage URLs</p>
                 </div>
               ) : (discoveredUrls || []).length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
@@ -910,7 +989,7 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                       {(discoveredUrls || []).length} total
                     </Badge>
                   </div>
-                  
+
                   <div className="space-y-2 max-h-96 overflow-y-auto">
                     {(discoveredUrls || []).map((url, index) => (
                       <div
@@ -939,21 +1018,17 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                   </div>
                 </div>
               )}
-              
-              {currentContext && (discoveredUrls || []).length > 0 && (
+
+              {selectedInstanceId && (discoveredUrls || []).length > 0 && (
                 <div className="mt-6 p-4 border rounded-lg bg-card">
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-medium text-sm">Apply Selection to Context</h4>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Selected URLs will be configured in the ZAP context for scanning
+                        Selected URLs will be used for filtering results and targeted scans
                       </p>
                     </div>
-                    <Button
-                      onClick={applyUrlSelection}
-                      disabled={selectedUrls.size === 0}
-                      className="shrink-0"
-                    >
+                    <Button onClick={applyUrlSelection} disabled={selectedUrls.size === 0} className="shrink-0">
                       <CheckCircle2 size={16} className="mr-2" />
                       Apply {selectedUrls.size > 0 ? `${selectedUrls.size} URLs` : 'Selection'}
                     </Button>
@@ -966,352 +1041,188 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
 
         {/* Scan Tab */}
         <TabsContent value="scan" className="space-y-6">
-          {!currentContext ? (
+          {!selectedInstanceId ? (
             <Card>
               <CardContent className="py-12">
                 <div className="text-center text-muted-foreground">
                   <Activity size={48} className="mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium">No active context</p>
-                  <p className="text-sm">Please create a context first to start scanning</p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : selectedUrls.size === 0 ? (
-            <Card>
-              <CardContent className="py-12">
-                <div className="text-center text-muted-foreground">
-                  <Target size={48} className="mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium">No URLs selected</p>
-                  <p className="text-sm">Please select URLs in the URLs tab before scanning</p>
+                  <p className="text-lg font-medium">No active instance</p>
+                  <p className="text-sm">Please create/select an instance first to start scanning</p>
                 </div>
               </CardContent>
             </Card>
           ) : (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Scan Configuration */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Settings size={20} className="text-accent" />
-                      Scan Configuration
-                    </CardTitle>
-                    <CardDescription>Choose scan type and settings</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Scan Mode</label>
-                      <Select value={selectedScanType} onValueChange={(value: 'passive' | 'active') => setSelectedScanType(value)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="passive">
-                            <div className="flex items-center gap-2">
-                              <Shield size={16} className="text-green-500" />
-                              <div>
-                                <div className="font-medium">PASSIVE Mode</div>
-                                <div className="text-xs text-muted-foreground">Safe passive scanning only</div>
-                              </div>
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="active">
-                            <div className="flex items-center gap-2">
-                              <Bug size={16} className="text-red-500" />
-                              <div>
-                                <div className="font-medium">ACTIVE Mode</div>
-                                <div className="text-xs text-muted-foreground">Active vulnerability testing</div>
-                              </div>
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="p-4 rounded-lg border bg-card">
-                      <div className="flex items-start gap-3">
-                        {selectedScanType === 'passive' ? (
-                          <Shield size={20} className="text-green-500 mt-0.5" />
-                        ) : (
-                          <AlertTriangle size={20} className="text-red-500 mt-0.5" />
-                        )}
-                        <div>
-                          <h4 className="font-medium text-sm">
-                            {selectedScanType === 'passive' ? 'Passive Mode' : 'Active Mode'}
-                          </h4>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {selectedScanType === 'passive' 
-                              ? 'Performs passive analysis without sending potentially harmful requests. Safe for production environments.'
-                              : 'Performs active security testing including injection attacks. Use only on test environments with proper authorization.'
-                            }
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Scanner Selection for Passive Mode */}
-                    {selectedScanType === 'passive' && (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="font-medium text-sm">Passive Scanner Selection</h4>
-                            <p className="text-xs text-muted-foreground">
-                              {selectedPassiveScanners.size === 0 
-                                ? `All ${availablePassiveScanners.length} passive scanners will be used`
-                                : `${selectedPassiveScanners.size} of ${availablePassiveScanners.length} scanners selected`
-                              }
-                            </p>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={selectAllPassiveScanners}
-                              className="text-xs"
-                            >
-                              All
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={deselectAllPassiveScanners}
-                              className="text-xs"
-                            >
-                              None
-                            </Button>
-                          </div>
-                        </div>
-                        
-                        <div className="p-3 rounded-lg border border-green-500/20 bg-green-500/5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Scan Configuration */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings size={20} className="text-accent" />
+                    Scan Configuration
+                  </CardTitle>
+                  <CardDescription>Choose scan type and settings</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Scan Mode</label>
+                    <Select value={selectedScanType} onValueChange={(value: 'passive' | 'active') => setSelectedScanType(value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="passive">
                           <div className="flex items-center gap-2">
                             <Shield size={16} className="text-green-500" />
-                            <p className="text-sm text-green-500 font-medium">
-                              Optional: Select specific passive scanners or leave empty to use all
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="max-h-64 overflow-y-auto space-y-2 border rounded-lg p-3 bg-muted/30">
-                          {availablePassiveScanners.map((scanner) => (
-                            <div
-                              key={scanner.id}
-                              className={`flex items-center gap-3 p-2 rounded border transition-all duration-200 ${
-                                selectedPassiveScanners.has(scanner.id)
-                                  ? "bg-accent/5 border-accent/40"
-                                  : "bg-background border-border hover:border-accent/20"
-                              }`}
-                            >
-                              <Checkbox
-                                checked={selectedPassiveScanners.has(scanner.id)}
-                                onCheckedChange={() => togglePassiveScannerSelection(scanner.id)}
-                                id={`passive-scanner-${scanner.id}`}
-                              />
-                              <div className="flex-1 min-w-0">
-                                <label
-                                  htmlFor={`passive-scanner-${scanner.id}`}
-                                  className="text-sm font-medium cursor-pointer block truncate"
-                                >
-                                  {scanner.name}
-                                </label>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <Badge variant="outline" className="text-xs text-green-600">
-                                    Passive
-                                  </Badge>
-                                  {scanner.quality === 'beta' && (
-                                    <Badge variant="outline" className="text-xs text-orange-500">
-                                      Beta
-                                    </Badge>
-                                  )}
-                                  {scanner.status === 'release' && (
-                                    <Badge variant="outline" className="text-xs text-blue-500">
-                                      Release
-                                    </Badge>
-                                  )}
-                                </div>
-                              </div>
+                            <div>
+                              <div className="font-medium">PASSIVE Mode</div>
+                              <div className="text-xs text-muted-foreground">Safe passive scanning only</div>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Scanner Selection for Active Mode */}
-                    {selectedScanType === 'active' && (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="font-medium text-sm">Active Scanner Selection</h4>
-                            <p className="text-xs text-muted-foreground">
-                              {selectedScanners.size} of {availableScanners.length} scanners selected
-                            </p>
                           </div>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={selectAllScanners}
-                              className="text-xs"
-                            >
-                              All
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={deselectAllScanners}
-                              className="text-xs"
-                            >
-                              None
-                            </Button>
-                          </div>
-                        </div>
-                        
-                        <div className="max-h-64 overflow-y-auto space-y-2 border rounded-lg p-3 bg-muted/30">
-                          {availableScanners.map((scanner) => (
-                            <div
-                              key={scanner.id}
-                              className={`flex items-center gap-3 p-2 rounded border transition-all duration-200 ${
-                                selectedScanners.has(scanner.id)
-                                  ? "bg-accent/5 border-accent/40"
-                                  : "bg-background border-border hover:border-accent/20"
-                              }`}
-                            >
-                              <Checkbox
-                                checked={selectedScanners.has(scanner.id)}
-                                onCheckedChange={() => toggleScannerSelection(scanner.id)}
-                                id={`scanner-${scanner.id}`}
-                              />
-                              <div className="flex-1 min-w-0">
-                                <label
-                                  htmlFor={`scanner-${scanner.id}`}
-                                  className="text-sm font-medium cursor-pointer block truncate"
-                                >
-                                  {scanner.name}
-                                </label>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <Badge variant="outline" className="text-xs">
-                                    CWE-{scanner.cweId}
-                                  </Badge>
-                                  {scanner.quality === 'beta' && (
-                                    <Badge variant="outline" className="text-xs text-orange-500">
-                                      Beta
-                                    </Badge>
-                                  )}
-                                </div>
-                              </div>
+                        </SelectItem>
+                        <SelectItem value="active">
+                          <div className="flex items-center gap-2">
+                            <Bug size={16} className="text-red-500" />
+                            <div>
+                              <div className="font-medium">ACTIVE Mode</div>
+                              <div className="text-xs text-muted-foreground">Active vulnerability testing</div>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                    <Button
-                      onClick={runScan}
-                      disabled={
-                        !currentContext || 
-                        selectedUrls.size === 0 || 
-                        isScanning ||
-                        (selectedScanType === 'active' && selectedScanners.size === 0)
-                      }
-                      className="w-full"
-                      variant={selectedScanType === 'active' ? 'destructive' : 'default'}
-                    >
-                      {isScanning ? (
-                        <>
-                          <Loader2 size={16} className="mr-2 animate-spin" />
-                          Scanning...
-                        </>
+                  <div className="p-4 rounded-lg border bg-card">
+                    <div className="flex items-start gap-3">
+                      {selectedScanType === 'passive' ? (
+                        <Shield size={20} className="text-green-500 mt-0.5" />
                       ) : (
-                        <>
-                          {selectedScanType === 'passive' ? (
-                            <Shield size={16} className="mr-2" />
-                          ) : (
-                            <Bug size={16} className="mr-2" />
-                          )}
-                          Start {selectedScanType.toUpperCase()} Scan
-                          {selectedScanType === 'active' && (
-                            <span className="ml-1 text-xs">
-                              ({selectedScanners.size} scanners)
-                            </span>
-                          )}
-                          {selectedScanType === 'passive' && selectedPassiveScanners.size > 0 && (
-                            <span className="ml-1 text-xs">
-                              ({selectedPassiveScanners.size} scanners)
-                            </span>
-                          )}
-                        </>
+                        <AlertTriangle size={20} className="text-red-500 mt-0.5" />
                       )}
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                {/* Scan Status */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Activity size={20} className="text-accent" />
-                      Scan Status
-                    </CardTitle>
-                    <CardDescription>Current scan progress</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span>Scan Type</span>
-                        <Badge variant="outline" className={selectedScanType === 'active' ? 'text-red-500' : 'text-green-500'}>
-                          {selectedScanType.toUpperCase()}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span>Status</span>
-                        <Badge variant="outline" className={
-                          isScanning ? 'text-blue-500' :
-                          alerts.length > 0 ? 'text-green-500' :
-                          'text-gray-500'
-                        }>
-                          {isScanning ? 'RUNNING' : alerts.length > 0 ? 'COMPLETED' : 'READY'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span>Selected URLs</span>
-                        <span>{selectedUrls.size}</span>
-                      </div>
-                      {selectedScanType === 'active' && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span>Selected Scanners</span>
-                          <span>{selectedScanners.size}/{availableScanners.length}</span>
-                        </div>
-                      )}
-                      {selectedScanType === 'passive' && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span>Selected Scanners</span>
-                          <span>
-                            {selectedPassiveScanners.size === 0 
-                              ? `All ${availablePassiveScanners.length}`
-                              : `${selectedPassiveScanners.size}/${availablePassiveScanners.length}`
-                            }
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {!isScanning && alerts.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <Activity size={48} className="mx-auto mb-4 opacity-50" />
-                        <p>No scan running</p>
-                        <p className="text-xs">
-                          {selectedScanType === 'active' && selectedScanners.size === 0
-                            ? 'Select scanners to enable active scanning'
-                            : selectedScanType === 'passive'
-                            ? 'Ready to start passive scanning'
-                            : 'Configure and start a scan to see progress'
+                      <div>
+                        <h4 className="font-medium text-sm">
+                          {selectedScanType === 'passive' ? 'Passive Mode' : 'Active Mode'}
+                        </h4>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {selectedScanType === 'passive' 
+                            ? 'Performs passive analysis without sending potentially harmful requests. Safe for production environments.'
+                            : 'Performs active security testing including injection attacks. Use only on test environments with proper authorization.'
                           }
                         </p>
                       </div>
-                    ) : null}
-                  </CardContent>
-                </Card>
-              </div>
-            </>
+                    </div>
+                  </div>
+
+                  {/* Scanners management (optional) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium text-sm">Scanners</h4>
+                      <Button size="sm" variant="outline" onClick={loadScanners} disabled={isLoadingScanners}>
+                        <RefreshCw size={14} className="mr-1" /> Refresh
+                      </Button>
+                    </div>
+                    {isLoadingScanners ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 size={16} className="animate-spin" /> Loading scanners...</div>
+                    ) : scanners.length === 0 ? (
+                      <div className="text-xs text-muted-foreground">No scanners information available</div>
+                    ) : (
+                      <div className="max-h-48 overflow-y-auto space-y-2 border rounded-lg p-2 bg-muted/30">
+                        {scanners.map(s => (
+                          <div key={String(s.id)} className="flex items-center justify-between p-2 rounded border bg-background border-border">
+                            <div className="min-w-0">
+                              <div className="text-sm truncate">{s.name}</div>
+                              <div className="flex gap-2 mt-1">
+                                {s.cweId && <Badge variant="outline" className="text-xs">CWE-{s.cweId}</Badge>}
+                                {s.quality && <Badge variant="outline" className="text-xs">{s.quality}</Badge>}
+                              </div>
+                            </div>
+                            <Button size="sm" variant={s.enabled ? 'outline' : 'default'} onClick={() => setScannerEnabled(s.id, !s.enabled)}>
+                              {s.enabled ? 'Disable' : 'Enable'}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    onClick={runScan}
+                    disabled={!selectedInstanceId || !targetUrl.trim() || isScanning}
+                    className="w-full"
+                    variant={selectedScanType === 'active' ? 'destructive' : 'default'}
+                  >
+                    {isScanning ? (
+                      <>
+                        <Loader2 size={16} className="mr-2 animate-spin" />
+                        Scanning...
+                      </>
+                    ) : (
+                      <>
+                        {selectedScanType === 'passive' ? (
+                          <Shield size={16} className="mr-2" />
+                        ) : (
+                          <Bug size={16} className="mr-2" />
+                        )}
+                        Start {selectedScanType.toUpperCase()} Scan
+                      </>
+                    )}
+                  </Button>
+                  {selectedScanType === 'passive' && (
+                    <Button variant="outline" className="w-full" onClick={enablePassiveScanning} disabled={!selectedInstanceId}>
+                      Enable Passive Scanning
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Scan Status */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity size={20} className="text-accent" />
+                    Scan Status
+                  </CardTitle>
+                  <CardDescription>Current scan progress</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Scan Type</span>
+                      <Badge variant="outline" className={selectedScanType === 'active' ? 'text-red-500' : 'text-green-500'}>
+                        {selectedScanType.toUpperCase()}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Status</span>
+                      <Badge variant="outline" className={
+                        isScanning ? 'text-blue-500' :
+                        alerts.length > 0 ? 'text-green-500' :
+                        'text-gray-500'
+                      }>
+                        {isScanning ? `RUNNING ${activeScanProgress}%` : alerts.length > 0 ? 'COMPLETED' : 'READY'}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Selected URLs</span>
+                      <span>{selectedUrls.size}</span>
+                    </div>
+                  </div>
+                  
+                  {!isScanning && alerts.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Activity size={48} className="mx-auto mb-4 opacity-50" />
+                      <p>No scan running</p>
+                      <p className="text-xs">
+                        {selectedScanType === 'passive'
+                          ? 'Ready to start passive scanning'
+                          : 'Configure and start a scan to see progress'
+                        }
+                      </p>
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </div>
           )}
           
           {scanStatus && (
@@ -1337,33 +1248,35 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                     Security Findings
                   </CardTitle>
                   <CardDescription>
-                    {!currentContext 
-                      ? "No active context for results"
+                    {!selectedInstanceId 
+                      ? "No active instance for results"
                       : `${alerts.length} findings found in ${selectedScanType.toUpperCase()} scan`
                     }
                   </CardDescription>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={fetchAlerts}
-                  disabled={isLoadingAlerts || !currentContext}
-                >
-                  {isLoadingAlerts ? (
-                    <Loader2 size={16} className="mr-2 animate-spin" />
-                  ) : (
-                    <RefreshCw size={16} className="mr-2" />
-                  )}
-                  Refresh
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fetchAlerts}
+                    disabled={isLoadingAlerts || !selectedInstanceId}
+                  >
+                    {isLoadingAlerts ? (
+                      <Loader2 size={16} className="mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw size={16} className="mr-2" />
+                    )}
+                    Refresh
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
-              {!currentContext ? (
+              {!selectedInstanceId ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <Activity size={48} className="mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium">No active context</p>
-                  <p className="text-sm">Please create a context and run a scan to see results</p>
+                  <p className="text-lg font-medium">No active instance</p>
+                  <p className="text-sm">Please create/select an instance and run a scan to see results</p>
                 </div>
               ) : isLoadingAlerts ? (
                 <div className="text-center py-8">
@@ -1438,7 +1351,7 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className={`w-2 h-2 rounded-full ${
-                currentContext ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                selectedInstanceId ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
               }`} />
               <span className="text-sm font-medium">
                 {getStatusMessage().message}
