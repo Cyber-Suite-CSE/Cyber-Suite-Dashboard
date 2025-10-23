@@ -85,9 +85,38 @@ interface ScanConfig {
   scanner_ids?: number[]
   wait?: boolean
   timeout?: number
+  context_name?: string
+  target?: string
+}
+
+interface APIScanner {
+  id: string
+  name: string
+  cweId: string
+  attackStrength: string
+  alertThreshold: string
+  wascId: string
+  enabled: string
+  quality: string
+  status: string
+  policyId: string
+  allDependenciesAvailable: string
+  dependencies: any[]
+}
+
+interface PassiveScanner {
+  id: string
+  name: string
+  alertThreshold: string
+  enabled: string
+  quality: string
+  status: string
 }
 
 export function APIChecker({ domain }: APIDiscoveryProps) {
+  // Global URL Input
+  const [targetUrl, setTargetUrl] = useState<string>(domain || '')
+  
   // Context Management
   const [currentContext, setCurrentContext] = useState<ContextResponse | null>(null)
   const [contextStatus, setContextStatus] = useState<StatusMessage | null>(null)
@@ -112,14 +141,79 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
   const [scanStatus, setScanStatus] = useState<StatusMessage | null>(null)
   const [selectedScanType, setSelectedScanType] = useState<'passive' | 'active'>('passive')
   const [isScanning, setIsScanning] = useState(false)
+  const [selectedScanners, setSelectedScanners] = useState<Set<string>>(new Set())
+  const [selectedPassiveScanners, setSelectedPassiveScanners] = useState<Set<string>>(new Set())
   
   // Results
   const [alerts, setAlerts] = useState<AlertResponse[]>([])
   const [isLoadingAlerts, setIsLoadingAlerts] = useState(false)
 
-  // Initialize spider config when domain changes
+  // Available API Scanners for Active Scanning
+  const availableScanners: APIScanner[] = [
+    { id: "6", name: "Path Traversal", cweId: "22", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "33", enabled: "false", quality: "release", status: "release", policyId: "2", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "7", name: "Remote File Inclusion", cweId: "98", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "5", enabled: "false", quality: "release", status: "release", policyId: "2", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "10045", name: "Source Code Disclosure - /WEB-INF Folder", cweId: "541", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "34", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "20017", name: "Source Code Disclosure - CVE-2012-1823", cweId: "20", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "20018", name: "Remote Code Execution - CVE-2012-1823", cweId: "20", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "20019", name: "External Redirect", cweId: "601", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "38", enabled: "false", quality: "release", status: "release", policyId: "3", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40018", name: "SQL Injection", cweId: "89", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "19", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40019", name: "SQL Injection - MySQL (Time Based)", cweId: "89", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "19", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40020", name: "SQL Injection - Hypersonic SQL (Time Based)", cweId: "89", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "19", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40021", name: "SQL Injection - Oracle (Time Based)", cweId: "89", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "19", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40022", name: "SQL Injection - PostgreSQL (Time Based)", cweId: "89", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "19", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40024", name: "SQL Injection - SQLite (Time Based)", cweId: "89", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "19", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40027", name: "SQL Injection - MsSQL (Time Based)", cweId: "89", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "19", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40043", name: "Log4Shell", cweId: "117", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "3", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40045", name: "Spring4Shell", cweId: "78", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "90019", name: "Server Side Code Injection", cweId: "94", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "90020", name: "Remote OS Command Injection", cweId: "78", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "31", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "90021", name: "XPath Injection", cweId: "643", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "39", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "90023", name: "XML External Entity Attack", cweId: "611", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "43", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "90034", name: "Cloud Metadata Potentially Exposed", cweId: "1230", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "0", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "90035", name: "Server Side Template Injection", cweId: "1336", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "90036", name: "Server Side Template Injection (Blind)", cweId: "1336", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "90037", name: "Remote OS Command Injection (Time Based)", cweId: "78", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "31", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "90017", name: "XSLT Injection", cweId: "91", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "23", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "10058", name: "GET for POST", cweId: "16", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "3", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "50000", name: "Script Active Scan Rules", cweId: "0", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "0", enabled: "false", quality: "release", status: "release", policyId: "3", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "90026", name: "SOAP Action Spoofing", cweId: "451", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "0", enabled: "false", quality: "beta", status: "beta", policyId: "3", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "90029", name: "SOAP XML Injection", cweId: "91", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "0", enabled: "false", quality: "beta", status: "beta", policyId: "3", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40008", name: "Parameter Tampering", cweId: "472", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "20", enabled: "false", quality: "release", status: "release", policyId: "4", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "0", name: "Directory Browsing", cweId: "548", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "48", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40028", name: "ELMAH Information Leak", cweId: "94", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "14", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40029", name: "Trace.axd Information Leak", cweId: "215", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "13", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40032", name: ".htaccess Information Leak", cweId: "94", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "14", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40034", name: ".env Information Leak", cweId: "215", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "13", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40035", name: "Hidden File Finder", cweId: "538", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "13", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] },
+    { id: "40042", name: "Spring Actuator Information Leak", cweId: "215", attackStrength: "DEFAULT", alertThreshold: "OFF", wascId: "13", enabled: "false", quality: "release", status: "release", policyId: "0", allDependenciesAvailable: "true", dependencies: [] }
+  ]
+
+  // Available Passive Scanners for Safe Scanning
+  const availablePassiveScanners: PassiveScanner[] = [
+    { id: "90030", name: "WSDL File Detection", alertThreshold: "DEFAULT", enabled: "true", quality: "beta", status: "beta" },
+    { id: "10111", name: "Authentication Request Identified", alertThreshold: "DEFAULT", enabled: "true", quality: "beta", status: "beta" },
+    { id: "10112", name: "Session Management Response Identified", alertThreshold: "DEFAULT", enabled: "true", quality: "beta", status: "beta" },
+    { id: "10113", name: "Verification Request Identified", alertThreshold: "DEFAULT", enabled: "true", quality: "beta", status: "beta" },
+    { id: "90022", name: "Application Error Disclosure", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
+    { id: "10015", name: "Re-examine Cache-control Directives", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
+    { id: "10019", name: "Content-Type Header Missing", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
+    { id: "10098", name: "Cross-Domain Misconfiguration", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
+    { id: "10202", name: "Absence of Anti-CSRF Tokens", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
+    { id: "10023", name: "Information Disclosure - Debug Error Messages", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
+    { id: "10024", name: "Information Disclosure - Sensitive Information in URL", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
+    { id: "10025", name: "Information Disclosure - Sensitive Information in HTTP Referrer Header", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
+    { id: "10062", name: "PII Disclosure", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
+    { id: "2", name: "Private IP Disclosure", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
+    { id: "10036", name: "HTTP Server Response Header", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
+    { id: "10035", name: "Strict-Transport-Security Header", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
+    { id: "10021", name: "X-Content-Type-Options Header Missing", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" },
+    { id: "10037", name: "Server Leaks Information via \"X-Powered-By\" HTTP Response Header Field(s)", alertThreshold: "DEFAULT", enabled: "true", quality: "release", status: "release" }
+  ]
+
+  // Initialize URLs when domain changes
   useEffect(() => {
     if (domain) {
+      setTargetUrl(domain)
       setSpiderConfig(prev => ({
         ...prev,
         target: domain
@@ -140,7 +234,8 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name_hint: `api-scan-${Date.now()}`,
-          owner_id: `user-${Date.now()}`
+          owner_id: `user-${Date.now()}`,
+          target_url: targetUrl
         })
       })
 
@@ -216,10 +311,11 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
       }
 
       const uploadResult: UploadResponse = await response.json()
-      setDiscoveredUrls(uploadResult.discovered_urls)
+      const urls = Array.isArray(uploadResult.discovered_urls) ? uploadResult.discovered_urls : []
+      setDiscoveredUrls(urls)
       
       setDiscoveryStatus({
-        message: `Successfully uploaded! Discovered ${uploadResult.discovered_urls.length} endpoints.`,
+        message: `Successfully uploaded! Discovered ${urls.length} endpoints.`,
         type: 'success'
       })
     } catch (error) {
@@ -282,11 +378,17 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
     try {
       const response = await fetch(`${getApiBaseUrl()}/urls`)
       if (response.ok) {
-        const urlsData: string[] = await response.json()
-        setDiscoveredUrls(urlsData)
+        const responseData = await response.json()
+        // Handle both direct array and object with urls property
+        const urlsData: string[] = responseData.urls || responseData
+        setDiscoveredUrls(Array.isArray(urlsData) ? urlsData : [])
+      } else {
+        console.error("Failed to fetch URLs:", response.statusText)
+        setDiscoveredUrls([])
       }
     } catch (error) {
       console.error("Error fetching URLs:", error)
+      setDiscoveredUrls([])
     }
   }
 
@@ -373,9 +475,29 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
 
     try {
       const scanConfig: ScanConfig = {
-        enable_all: true,
         wait: true,
-        timeout: 300
+        timeout: 300,
+        context_name: currentContext.context_name,
+        target: targetUrl
+      }
+
+      // For active scans, include scanner selection
+      if (selectedScanType === 'active') {
+        if (selectedScanners.size === 0) {
+          setScanStatus({ message: 'Please select at least one scanner for active scanning', type: 'error' })
+          setIsScanning(false)
+          return
+        }
+        scanConfig.enable_all = false
+        scanConfig.scanner_ids = Array.from(selectedScanners).map(id => parseInt(id))
+      } else {
+        // For passive scans, include scanner selection or enable all if none selected
+        if (selectedPassiveScanners.size === 0) {
+          scanConfig.enable_all = true
+        } else {
+          scanConfig.enable_all = false
+          scanConfig.scanner_ids = Array.from(selectedPassiveScanners).map(id => parseInt(id))
+        }
       }
 
       const endpoint = selectedScanType === 'passive' ? '/passive_scan' : '/active_scan'
@@ -422,6 +544,44 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
     }
   }
 
+  // Scanner Management Functions
+  const toggleScannerSelection = (scannerId: string) => {
+    const newSelection = new Set(selectedScanners)
+    if (newSelection.has(scannerId)) {
+      newSelection.delete(scannerId)
+    } else {
+      newSelection.add(scannerId)
+    }
+    setSelectedScanners(newSelection)
+  }
+
+  const selectAllScanners = () => {
+    setSelectedScanners(new Set(availableScanners.map(s => s.id)))
+  }
+
+  const deselectAllScanners = () => {
+    setSelectedScanners(new Set())
+  }
+
+  // Passive Scanner Management Functions
+  const togglePassiveScannerSelection = (scannerId: string) => {
+    const newSelection = new Set(selectedPassiveScanners)
+    if (newSelection.has(scannerId)) {
+      newSelection.delete(scannerId)
+    } else {
+      newSelection.add(scannerId)
+    }
+    setSelectedPassiveScanners(newSelection)
+  }
+
+  const selectAllPassiveScanners = () => {
+    setSelectedPassiveScanners(new Set(availablePassiveScanners.map(s => s.id)))
+  }
+
+  const deselectAllPassiveScanners = () => {
+    setSelectedPassiveScanners(new Set())
+  }
+
   // Helper Functions
   const getRiskColor = (risk: string) => {
     const colors: Record<string, string> = {
@@ -447,6 +607,29 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
         <h1 className="text-3xl font-bold text-foreground mb-2">API Security Scanner</h1>
         <p className="text-muted-foreground">Discover, analyze, and test API security with OWASP ZAP</p>
       </div>
+
+      {/* Global Target URL */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Target size={20} className="text-accent" />
+            Target URL
+          </CardTitle>
+          <CardDescription>Enter the main URL or domain to scan</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Input 
+            value={targetUrl}
+            onChange={(e) => {
+              setTargetUrl(e.target.value)
+              // Also update spider config to keep them in sync
+              setSpiderConfig(prev => ({ ...prev, target: e.target.value }))
+            }}
+            placeholder="https://api.example.com"
+            className="text-sm"
+          />
+        </CardContent>
+      </Card>
 
       {/* Context Management */}
       <Card>
@@ -474,7 +657,8 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
               {!currentContext ? (
                 <Button
                   onClick={createContext}
-                  disabled={isCreatingContext}
+                  disabled={isCreatingContext || !targetUrl.trim()}
+                  title={!targetUrl.trim() ? "Please enter a target URL above first" : ""}
                 >
                   {isCreatingContext ? (
                     <>
@@ -499,6 +683,17 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
               )}
             </div>
           </div>
+          
+          {!currentContext && !targetUrl.trim() && (
+            <div className="p-3 rounded-lg border border-orange-500/20 bg-orange-500/5">
+              <div className="flex items-center gap-2">
+                <AlertCircle size={16} className="text-orange-500" />
+                <p className="text-sm text-orange-500 font-medium">
+                  Please enter a target URL above to create a context
+                </p>
+              </div>
+            </div>
+          )}
           
           {contextStatus && (
             <div className={`p-4 rounded-lg border ${
@@ -658,15 +853,15 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                     Discovered URLs
                   </CardTitle>
                   <CardDescription>
-                    {selectedUrls.size} of {discoveredUrls.length} URLs selected for scanning
+                    {selectedUrls.size} of {(discoveredUrls || []).length} URLs selected for scanning
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setSelectedUrls(new Set(discoveredUrls))}
-                    disabled={discoveredUrls.length === 0}
+                    onClick={() => setSelectedUrls(new Set(discoveredUrls || []))}
+                    disabled={(discoveredUrls || []).length === 0}
                   >
                     <Eye size={16} className="mr-2" />
                     Select All
@@ -698,7 +893,7 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                   <p className="text-lg font-medium">No active context</p>
                   <p className="text-sm">Please create a context first to manage URLs</p>
                 </div>
-              ) : discoveredUrls.length === 0 ? (
+              ) : (discoveredUrls || []).length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <Target size={48} className="mx-auto mb-4 opacity-50" />
                   <p className="text-lg font-medium">No URLs discovered yet</p>
@@ -712,12 +907,12 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                       <span className="text-sm font-medium">URLs found and ready for selection</span>
                     </div>
                     <Badge variant="outline" className="text-xs">
-                      {discoveredUrls.length} total
+                      {(discoveredUrls || []).length} total
                     </Badge>
                   </div>
                   
                   <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {discoveredUrls.map((url, index) => (
+                    {(discoveredUrls || []).map((url, index) => (
                       <div
                         key={index}
                         className={`flex items-center gap-3 p-3 rounded-lg border transition-all duration-200 hover:shadow-sm ${
@@ -745,7 +940,7 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                 </div>
               )}
               
-              {currentContext && discoveredUrls.length > 0 && (
+              {currentContext && (discoveredUrls || []).length > 0 && (
                 <div className="mt-6 p-4 border rounded-lg bg-card">
                   <div className="flex items-center justify-between">
                     <div>
@@ -854,9 +1049,169 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                       </div>
                     </div>
 
+                    {/* Scanner Selection for Passive Mode */}
+                    {selectedScanType === 'passive' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-medium text-sm">Passive Scanner Selection</h4>
+                            <p className="text-xs text-muted-foreground">
+                              {selectedPassiveScanners.size === 0 
+                                ? `All ${availablePassiveScanners.length} passive scanners will be used`
+                                : `${selectedPassiveScanners.size} of ${availablePassiveScanners.length} scanners selected`
+                              }
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={selectAllPassiveScanners}
+                              className="text-xs"
+                            >
+                              All
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={deselectAllPassiveScanners}
+                              className="text-xs"
+                            >
+                              None
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <div className="p-3 rounded-lg border border-green-500/20 bg-green-500/5">
+                          <div className="flex items-center gap-2">
+                            <Shield size={16} className="text-green-500" />
+                            <p className="text-sm text-green-500 font-medium">
+                              Optional: Select specific passive scanners or leave empty to use all
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="max-h-64 overflow-y-auto space-y-2 border rounded-lg p-3 bg-muted/30">
+                          {availablePassiveScanners.map((scanner) => (
+                            <div
+                              key={scanner.id}
+                              className={`flex items-center gap-3 p-2 rounded border transition-all duration-200 ${
+                                selectedPassiveScanners.has(scanner.id)
+                                  ? "bg-accent/5 border-accent/40"
+                                  : "bg-background border-border hover:border-accent/20"
+                              }`}
+                            >
+                              <Checkbox
+                                checked={selectedPassiveScanners.has(scanner.id)}
+                                onCheckedChange={() => togglePassiveScannerSelection(scanner.id)}
+                                id={`passive-scanner-${scanner.id}`}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <label
+                                  htmlFor={`passive-scanner-${scanner.id}`}
+                                  className="text-sm font-medium cursor-pointer block truncate"
+                                >
+                                  {scanner.name}
+                                </label>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Badge variant="outline" className="text-xs text-green-600">
+                                    Passive
+                                  </Badge>
+                                  {scanner.quality === 'beta' && (
+                                    <Badge variant="outline" className="text-xs text-orange-500">
+                                      Beta
+                                    </Badge>
+                                  )}
+                                  {scanner.status === 'release' && (
+                                    <Badge variant="outline" className="text-xs text-blue-500">
+                                      Release
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Scanner Selection for Active Mode */}
+                    {selectedScanType === 'active' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-medium text-sm">Active Scanner Selection</h4>
+                            <p className="text-xs text-muted-foreground">
+                              {selectedScanners.size} of {availableScanners.length} scanners selected
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={selectAllScanners}
+                              className="text-xs"
+                            >
+                              All
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={deselectAllScanners}
+                              className="text-xs"
+                            >
+                              None
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <div className="max-h-64 overflow-y-auto space-y-2 border rounded-lg p-3 bg-muted/30">
+                          {availableScanners.map((scanner) => (
+                            <div
+                              key={scanner.id}
+                              className={`flex items-center gap-3 p-2 rounded border transition-all duration-200 ${
+                                selectedScanners.has(scanner.id)
+                                  ? "bg-accent/5 border-accent/40"
+                                  : "bg-background border-border hover:border-accent/20"
+                              }`}
+                            >
+                              <Checkbox
+                                checked={selectedScanners.has(scanner.id)}
+                                onCheckedChange={() => toggleScannerSelection(scanner.id)}
+                                id={`scanner-${scanner.id}`}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <label
+                                  htmlFor={`scanner-${scanner.id}`}
+                                  className="text-sm font-medium cursor-pointer block truncate"
+                                >
+                                  {scanner.name}
+                                </label>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Badge variant="outline" className="text-xs">
+                                    CWE-{scanner.cweId}
+                                  </Badge>
+                                  {scanner.quality === 'beta' && (
+                                    <Badge variant="outline" className="text-xs text-orange-500">
+                                      Beta
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <Button
                       onClick={runScan}
-                      disabled={!currentContext || selectedUrls.size === 0 || isScanning}
+                      disabled={
+                        !currentContext || 
+                        selectedUrls.size === 0 || 
+                        isScanning ||
+                        (selectedScanType === 'active' && selectedScanners.size === 0)
+                      }
                       className="w-full"
                       variant={selectedScanType === 'active' ? 'destructive' : 'default'}
                     >
@@ -873,6 +1228,16 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                             <Bug size={16} className="mr-2" />
                           )}
                           Start {selectedScanType.toUpperCase()} Scan
+                          {selectedScanType === 'active' && (
+                            <span className="ml-1 text-xs">
+                              ({selectedScanners.size} scanners)
+                            </span>
+                          )}
+                          {selectedScanType === 'passive' && selectedPassiveScanners.size > 0 && (
+                            <span className="ml-1 text-xs">
+                              ({selectedPassiveScanners.size} scanners)
+                            </span>
+                          )}
                         </>
                       )}
                     </Button>
@@ -910,13 +1275,37 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                         <span>Selected URLs</span>
                         <span>{selectedUrls.size}</span>
                       </div>
+                      {selectedScanType === 'active' && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span>Selected Scanners</span>
+                          <span>{selectedScanners.size}/{availableScanners.length}</span>
+                        </div>
+                      )}
+                      {selectedScanType === 'passive' && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span>Selected Scanners</span>
+                          <span>
+                            {selectedPassiveScanners.size === 0 
+                              ? `All ${availablePassiveScanners.length}`
+                              : `${selectedPassiveScanners.size}/${availablePassiveScanners.length}`
+                            }
+                          </span>
+                        </div>
+                      )}
                     </div>
                     
                     {!isScanning && alerts.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         <Activity size={48} className="mx-auto mb-4 opacity-50" />
                         <p>No scan running</p>
-                        <p className="text-xs">Configure and start a scan to see progress</p>
+                        <p className="text-xs">
+                          {selectedScanType === 'active' && selectedScanners.size === 0
+                            ? 'Select scanners to enable active scanning'
+                            : selectedScanType === 'passive'
+                            ? 'Ready to start passive scanning'
+                            : 'Configure and start a scan to see progress'
+                          }
+                        </p>
                       </div>
                     ) : null}
                   </CardContent>
@@ -1056,7 +1445,7 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
               </span>
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span>URLs: {discoveredUrls.length}</span>
+              <span>URLs: {(discoveredUrls || []).length}</span>
               <span>Selected: {selectedUrls.size}</span>
               <span>Findings: {alerts.length}</span>
             </div>
