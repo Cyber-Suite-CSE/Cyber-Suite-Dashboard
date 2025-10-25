@@ -32,6 +32,7 @@ import {
   Power,
   Trash2
 } from "lucide-react"
+import { parseJsonFile } from "next/dist/build/load-jsconfig"
 
 interface APIDiscoveryProps {
   domain: string
@@ -113,6 +114,35 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
   const [isCreatingContext, setIsCreatingContext] = useState(false)
   const [newContextName, setNewContextName] = useState<string>("")
   const [contextStatus, setContextStatus] = useState<StatusMessage | null>(null)
+  // Context Auth States
+  const [includeRegexInput, setIncludeRegexInput] = useState<string>("")
+  const [excludeRegexInput, setExcludeRegexInput] = useState<string>("")
+
+  // Flow A: Header Auth
+  const [authHeaderName, setAuthHeaderName] = useState<string>("Authorization")
+  const [authHeaderValue, setAuthHeaderValue] = useState<string>("") // e.g., "Bearer eyJ..." or API key value
+  const [authHeaderDesc, setAuthHeaderDesc] = useState<string>("Auth Header")
+  const [authHeaderUrlRegex, setAuthHeaderUrlRegex] = useState<string>("")
+  const [isApplyingHeaderAuth, setIsApplyingHeaderAuth] = useState(false)
+  const [authHeaderStatus, setAuthHeaderStatus] = useState<StatusMessage | null>(null)
+
+  // Flow B: JSON Auth + Users
+  const [loginUrl, setLoginUrl] = useState<string>("")
+  const [loginRequestData, setLoginRequestData] = useState<string>("email={%username%}&password={%password%}")
+  const [loggedInRegex, setLoggedInRegex] = useState<string>("\"token\":\\s*\".+\"")
+  const [isConfiguringJsonAuth, setIsConfiguringJsonAuth] = useState(false)
+  const [jsonAuthStatus, setJsonAuthStatus] = useState<StatusMessage | null>(null)
+
+  const [userName, setUserName] = useState<string>("")
+  const [userUsernameValue, setUserUsernameValue] = useState<string>("")
+  const [userPasswordValue, setUserPasswordValue] = useState<string>("")
+  const [userEnabled, setUserEnabled] = useState<boolean>(true)
+  const [isCreatingUser, setIsCreatingUser] = useState(false)
+  const [createdUserId, setCreatedUserId] = useState<string | null>(null)
+  const [userMgmtStatus, setUserMgmtStatus] = useState<StatusMessage | null>(null)
+  const [isAuthSpiderRunning, setIsAuthSpiderRunning] = useState(false)
+  const [isAuthActiveScanRunning, setIsAuthActiveScanRunning] = useState(false)
+  const [authActionsStatus, setAuthActionsStatus] = useState<StatusMessage | null>(null)
 
   // Discovery State
   const [isUploading, setIsUploading] = useState(false)
@@ -142,6 +172,7 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
   // Scanners (optional management)
   const [scanners, setScanners] = useState<ScannerInfo[]>([])
   const [isLoadingScanners, setIsLoadingScanners] = useState(false)
+  const [isBulkDisabling, setIsBulkDisabling] = useState(false)
 
   // Results
   const [alerts, setAlerts] = useState<NormalizedAlert[]>([])
@@ -177,6 +208,24 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
     })
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     return res.json()
+  }
+
+  // Helpers for forms
+  const parseRegexList = (raw: string): string[] =>
+    raw
+      .split(/\r?\n|,/)
+      .map(s => s.trim())
+      .filter(Boolean)
+
+  const deriveRegexFromUrl = (u: string): string => {
+    try {
+      const url = new URL(u)
+      // Scope to host and scheme; match anything under it
+      const hostEscaped = url.host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      return `^${url.protocol}//${hostEscaped}(/.*)?$`
+    } catch {
+      return u ? `^${u.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}.*$` : ""
+    }
   }
 
   // Instance Management Functions
@@ -273,17 +322,200 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
     try {
       await apiPost(`/instances/${selectedInstanceId}/context`, {
         context_name: newContextName.trim(),
-        include_regex: [],
-        exclude_regex: [],
+        include_regex: parseRegexList(includeRegexInput),
+        exclude_regex: parseRegexList(excludeRegexInput),
       })
       setContextStatus({ message: `Context created (${newContextName})`, type: 'success' })
       setNewContextName('')
+      setIncludeRegexInput('')
+      setExcludeRegexInput('')
       await loadContexts()
     } catch (e) {
       console.error('Create context failed', e)
       setContextStatus({ message: `Failed to create context: ${e instanceof Error ? e.message : 'Unknown error'}`, type: 'error' })
     } finally {
       setIsCreatingContext(false)
+    }
+  }
+
+  // Flow A: Header Auth
+  const applyHeaderAuth = async () => {
+    if (!selectedInstanceId) {
+      setAuthHeaderStatus({ message: 'Select an instance first', type: 'error' })
+      return
+    }
+    if (!authHeaderName.trim() || !authHeaderValue.trim()) {
+      setAuthHeaderStatus({ message: 'Header name and value are required', type: 'error' })
+      return
+    }
+    setIsApplyingHeaderAuth(true)
+    setAuthHeaderStatus(null)
+    try {
+      const body = {
+        description: authHeaderDesc || 'Auth Header',
+        header_name: authHeaderName.trim(),
+        header_value: authHeaderValue.trim(),
+        url_regex: authHeaderUrlRegex.trim() || (targetUrl ? deriveRegexFromUrl(targetUrl) : ''),
+        enabled: true,
+      }
+      await apiPost(`/instances/${selectedInstanceId}/auth/header`, body)
+      setAuthHeaderStatus({ message: 'Header auth rule applied', type: 'success' })
+    } catch (e) {
+      console.error('Apply header auth failed', e)
+      setAuthHeaderStatus({ message: `Failed to apply header auth: ${e instanceof Error ? e.message : 'Unknown error'}`, type: 'error' })
+    } finally {
+      setIsApplyingHeaderAuth(false)
+    }
+  }
+
+  const removeHeaderAuth = async () => {
+    if (!selectedInstanceId) {
+      setAuthHeaderStatus({ message: 'Select an instance first', type: 'error' })
+      return
+    }
+    setIsApplyingHeaderAuth(true)
+    setAuthHeaderStatus(null)
+    try {
+      const body = {
+        description: authHeaderDesc || 'Auth Header',
+        remove: true,
+        header_name: authHeaderName.trim() || 'Authorization',
+        header_value: '',
+      }
+      await apiPost(`/instances/${selectedInstanceId}/auth/header`, body)
+      setAuthHeaderStatus({ message: 'Header auth rule removed', type: 'success' })
+    } catch (e) {
+      console.error('Remove header auth failed', e)
+      setAuthHeaderStatus({ message: `Failed to remove header auth: ${e instanceof Error ? e.message : 'Unknown error'}`, type: 'error' })
+    } finally {
+      setIsApplyingHeaderAuth(false)
+    }
+  }
+
+  // Flow B: JSON Auth
+  const configureJsonAuth = async () => {
+    if (!selectedInstanceId || !selectedContext) {
+      setJsonAuthStatus({ message: 'Select an instance and context first', type: 'error' })
+      return
+    }
+    if (!loginUrl.trim() || !loginRequestData.includes('{%username%}') || !loginRequestData.includes('{%password%}')) {
+      setJsonAuthStatus({ message: 'Login URL and request data with {%username%} and {%password%} are required', type: 'error' })
+      return
+    }
+    setIsConfiguringJsonAuth(true)
+    setJsonAuthStatus(null)
+    try {
+      await apiPost(`/instances/${selectedInstanceId}/auth/context/json`, {
+        context_name: selectedContext,
+        login_url: loginUrl.trim(),
+        login_request_data: loginRequestData,
+        logged_in_regex: loggedInRegex.trim(),
+      })
+      setJsonAuthStatus({ message: 'JSON-based authentication configured for context', type: 'success' })
+    } catch (e) {
+      console.error('Configure JSON auth failed', e)
+      setJsonAuthStatus({ message: `Failed to configure auth: ${e instanceof Error ? e.message : 'Unknown error'}`, type: 'error' })
+    } finally {
+      setIsConfiguringJsonAuth(false)
+    }
+  }
+
+  const createAuthUser = async () => {
+    if (!selectedInstanceId || !selectedContext) {
+      setUserMgmtStatus({ message: 'Select an instance and context first', type: 'error' })
+      return
+    }
+    if (!userName.trim() || !userUsernameValue.trim() || !userPasswordValue.trim()) {
+      setUserMgmtStatus({ message: 'User name, username and password are required', type: 'error' })
+      return
+    }
+    setIsCreatingUser(true)
+    setUserMgmtStatus(null)
+    try {
+      const res = await apiPost(`/instances/${selectedInstanceId}/users`, {
+        context_name: selectedContext,
+        user_name: userName.trim(),
+        username_value: userUsernameValue.trim(),
+        password_value: userPasswordValue,
+        enabled: userEnabled,
+      })
+      const uid = String(res?.user_id ?? res?.id ?? res?.userId ?? '')
+      if (uid) setCreatedUserId(uid)
+      setUserMgmtStatus({ message: `User created${uid ? ` (id: ${uid})` : ''}`, type: 'success' })
+    } catch (e) {
+      console.error('Create user failed', e)
+      setUserMgmtStatus({ message: `Failed to create user: ${e instanceof Error ? e.message : 'Unknown error'}`, type: 'error' })
+    } finally {
+      setIsCreatingUser(false)
+    }
+  }
+
+  const runSpiderAsUser = async () => {
+    if (!selectedInstanceId || !selectedContext || !createdUserId) {
+      setAuthActionsStatus({ message: 'Context and user are required to spider as user', type: 'error' })
+      return
+    }
+    const tgt = spiderConfig.target_url || targetUrl
+    if (!tgt) {
+      setAuthActionsStatus({ message: 'Target URL is required', type: 'error' })
+      return
+    }
+    setIsAuthSpiderRunning(true)
+    setAuthActionsStatus({ message: 'Starting authenticated spider...', type: 'info' })
+    try {
+      const payload = {
+        context_name: selectedContext,
+        user_id: createdUserId,
+        target_url: tgt,
+        recurse: spiderConfig.recurse ?? true,
+      }
+      const data = await apiPost(`/instances/${selectedInstanceId}/spider/authenticated`, payload)
+      const sid = data?.scan_id || data?.scanId || data?.id || null
+      if (sid) {
+        await pollSpiderStatus(String(sid))
+        await getSpiderResults(String(sid))
+      }
+      setAuthActionsStatus({ message: 'Authenticated spider completed', type: 'success' })
+    } catch (e) {
+      console.error('Spider as user failed', e)
+      setAuthActionsStatus({ message: `Spider failed: ${e instanceof Error ? e.message : 'Unknown error'}`, type: 'error' })
+    } finally {
+      setIsAuthSpiderRunning(false)
+    }
+  }
+
+  const runActiveScanAsUser = async () => {
+    if (!selectedInstanceId || !selectedContext || !createdUserId) {
+      setAuthActionsStatus({ message: 'Context and user are required to scan as user', type: 'error' })
+      return
+    }
+    const tgt = targetUrl
+    if (!tgt) {
+      setAuthActionsStatus({ message: 'Target URL is required', type: 'error' })
+      return
+    }
+    setIsAuthActiveScanRunning(true)
+    setAuthActionsStatus({ message: 'Starting authenticated active scan...', type: 'info' })
+    try {
+      const payload = {
+        context_name: selectedContext,
+        user_id: createdUserId,
+        target_url: tgt,
+        scan_policy_name: null,
+        recurse: true,
+      }
+      const data = await apiPost(`/instances/${selectedInstanceId}/scan/active/authenticated`, payload)
+      const sid = data?.scan_id || data?.scanId || data?.id || null
+      if (sid) {
+        await pollActiveScanStatus(String(sid))
+      }
+      setAuthActionsStatus({ message: 'Authenticated active scan completed', type: 'success' })
+      await fetchAlerts()
+    } catch (e) {
+      console.error('Active scan as user failed', e)
+      setAuthActionsStatus({ message: `Active scan failed: ${e instanceof Error ? e.message : 'Unknown error'}`, type: 'error' })
+    } finally {
+      setIsAuthActiveScanRunning(false)
     }
   }
 
@@ -304,11 +536,13 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
     try {
       const formData = new FormData()
       formData.append('file', file, file.name)
+      if (targetUrl) formData.append('target', targetUrl)
+      if (selectedContext) formData.append('context_name', selectedContext)
 
       await apiPost(`/instances/${selectedInstanceId}/openapi`, formData)
 
       setDiscoveryStatus({
-        message: `OpenAPI uploaded successfully. Refreshing URLs...`,
+        message: `OpenAPI uploaded successfully. Check URLs tab for discovered endpoints.`,
         type: 'success'
       })
       await fetchUrls()
@@ -351,10 +585,10 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
       // Poll status
       if (sid) {
         await pollSpiderStatus(sid)
+        await getSpiderResults(sid)
       }
 
-      // Fetch URLs after completion
-      await fetchUrls()
+
       setDiscoveryStatus({ message: 'Spider completed! Check URLs tab for discovered endpoints.', type: 'success' })
     } catch (error) {
       console.error("Error running spider:", error)
@@ -376,7 +610,7 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
       try {
         const status = await apiGet(`/instances/${selectedInstanceId}/spider/${scanId}/status`)
         // Accept percent, progress, or status string
-        const percent = Number(status?.progress ?? status?.percentage ?? status?.percent ?? 0)
+        const percent = Number(status?.status ?? 0)
         if (!Number.isNaN(percent)) setSpiderProgress(Math.max(0, Math.min(100, percent)))
         const state = String(status?.status || '').toLowerCase()
         if (percent >= 100 || ['done','complete','completed','finished'].includes(state)) {
@@ -391,6 +625,24 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
         console.error('Spider status polling error', e)
         break
       }
+    }
+  }
+
+  const getSpiderResults = async (scan_id: string) => {
+    if (!selectedInstanceId) return
+    try {
+      const qs = new URLSearchParams()
+      if (selectedContext) qs.set('context_name', selectedContext)
+
+      const path = `/instances/${selectedInstanceId}/spider/${encodeURIComponent(scan_id)}/results${qs.toString() ? `?${qs.toString()}` : ''}`
+      const data = await apiGet(path)
+
+      const urlsData: string[] = Array.isArray(data?.urls) ? data.urls : (Array.isArray(data) ? data : [])
+      setDiscoveredUrls(urlsData)
+    } catch (error) {
+      console.error("Error fetching spider results:", error)
+      console.log("Falling back to fetch URLs endpoint.")
+      await fetchUrls()
     }
   }
 
@@ -422,6 +674,11 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
       setDiscoveryStatus({ message: 'Please select at least one URL first', type: 'warning' })
       return
     }
+    const data = await apiPost(`/instances/${selectedInstanceId}/update-urls`, {
+      context_name: selectedContext,
+      all_urls: discoveredUrls,
+      include_urls: Array.from(selectedUrls),
+    })
     setDiscoveryStatus({ message: `Selected ${selectedUrls.size} URLs for scanning/filtering.`, type: 'success' })
   }
 
@@ -472,7 +729,7 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
       await new Promise(r => setTimeout(r, 1500))
       try {
         const status = await apiGet(`/instances/${selectedInstanceId}/scan/active/${scanId}/status`)
-        const percent = Number(status?.progress ?? status?.percentage ?? status?.percent ?? 0)
+        const percent = Number(status?.status ?? 0)
         if (!Number.isNaN(percent)) setActiveScanProgress(Math.max(0, Math.min(100, percent)))
         const state = String(status?.status || '').toLowerCase()
         if (percent >= 100 || ['done','complete','completed','finished'].includes(state)) {
@@ -570,6 +827,30 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
     } catch (e) {
       console.error('Enable passive scanning failed', e)
       setScanStatus({ message: 'Failed to enable passive scanning', type: 'error' })
+    }
+  }
+
+  const disableAllScanners = async () => {
+    if (!selectedInstanceId) return
+    if (!scanners || scanners.length === 0) {
+      setScanStatus({ message: 'No scanners to disable', type: 'info' })
+      return
+    }
+    setIsBulkDisabling(true)
+    try {
+      const toDisable = scanners.filter(s => !!s.enabled)
+      await Promise.all(
+        toDisable.map(s =>
+          apiPost(`/instances/${selectedInstanceId}/scan/scanners/${s.id}/disable`)
+        )
+      )
+      setScanners(prev => prev.map(s => ({ ...s, enabled: false })))
+      setScanStatus({ message: `Disabled ${toDisable.length} scanners`, type: 'success' })
+    } catch (e) {
+      console.error('Disable all scanners failed', e)
+      setScanStatus({ message: 'Failed to disable all scanners', type: 'error' })
+    } finally {
+      setIsBulkDisabling(false)
     }
   }
 
@@ -782,6 +1063,184 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                   <p className="text-sm">{contextStatus.message}</p>
                 </div>
               )}
+
+              {/* Include/Exclude Regex for New Context */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium">Include Regex (one per line)</label>
+                  <textarea
+                    className="w-full mt-1 text-sm rounded-md border bg-background p-2"
+                    rows={3}
+                    placeholder={targetUrl ? deriveRegexFromUrl(targetUrl) : "^https?://api.example.com(/.*)?$"}
+                    value={includeRegexInput}
+                    onChange={(e) => setIncludeRegexInput(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Exclude Regex (one per line)</label>
+                  <textarea
+                    className="w-full mt-1 text-sm rounded-md border bg-background p-2"
+                    rows={3}
+                    placeholder={"^https?://(www\\.)?external-login.example.com/.*$"}
+                    value={excludeRegexInput}
+                    onChange={(e) => setExcludeRegexInput(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Authentication Config */}
+              <div className="mt-2 p-4 border rounded-lg bg-muted/30">
+                <h4 className="font-medium text-sm mb-3">Authentication</h4>
+                <Tabs defaultValue="header">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="header">Auth Header</TabsTrigger>
+                    <TabsTrigger value="json">JSON Login (Users)</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="header" className="space-y-3 pt-3">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-sm font-medium">Header Name</label>
+                        <Input value={authHeaderName} onChange={(e) => setAuthHeaderName(e.target.value)} placeholder="Authorization / x-api-key" />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-sm font-medium">Header Value</label>
+                        <Input value={authHeaderValue} onChange={(e) => setAuthHeaderValue(e.target.value)} placeholder="Bearer <JWT> or API key" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                      <div className="md:col-span-2">
+                        <label className="text-sm font-medium">URL Scope (Regex)</label>
+                        <Input
+                          value={authHeaderUrlRegex}
+                          onChange={(e) => setAuthHeaderUrlRegex(e.target.value)}
+                          placeholder={targetUrl ? deriveRegexFromUrl(targetUrl) : '^https?://api.example.com(/.*)?$'}
+                        />
+                      </div>
+                      <Button variant="outline" onClick={() => setAuthHeaderUrlRegex(targetUrl ? deriveRegexFromUrl(targetUrl) : '')}>Use Target URL</Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button onClick={applyHeaderAuth} disabled={!selectedInstanceId || isApplyingHeaderAuth || !authHeaderName || !authHeaderValue}>
+                        {isApplyingHeaderAuth ? (<><Loader2 size={16} className="mr-2 animate-spin"/> Applying...</>) : (<><Shield size={16} className="mr-2"/> Apply Header Rule</>)}
+                      </Button>
+                      <Button variant="outline" onClick={removeHeaderAuth} disabled={!selectedInstanceId || isApplyingHeaderAuth}>
+                        {isApplyingHeaderAuth ? (<><Loader2 size={16} className="mr-2 animate-spin"/> Removing...</>) : (<><Trash2 size={16} className="mr-2"/> Remove Rule</>)}
+                      </Button>
+                    </div>
+                    {authHeaderStatus && (
+                      <div className={`p-3 rounded border ${
+                        authHeaderStatus.type === 'success' ? 'bg-green-500/5 border-green-500/20 text-green-600' :
+                        authHeaderStatus.type === 'error' ? 'bg-red-500/5 border-red-500/20 text-red-600' :
+                        'bg-blue-500/5 border-blue-500/20 text-blue-600'
+                      }`}>
+                        <p className="text-sm">{authHeaderStatus.message}</p>
+                      </div>
+                    )}
+                  </TabsContent>
+                  <TabsContent value="json" className="space-y-4 pt-3">
+                    {!selectedContext ? (
+                      <div className="p-3 rounded-lg border border-orange-500/20 bg-orange-500/5">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle size={16} className="text-orange-500" />
+                          <p className="text-sm text-orange-500 font-medium">
+                            Select or create a context first to configure JSON authentication
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="md:col-span-2">
+                            <label className="text-sm font-medium">Login URL</label>
+                            <Input value={loginUrl} onChange={(e) => setLoginUrl(e.target.value)} placeholder="https://api.example.com/auth/login" />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium">Logged-In Regex</label>
+                            <Input value={loggedInRegex} onChange={(e) => setLoggedInRegex(e.target.value)} placeholder={"\"token\":\\s*\".+\""} />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium">Login Request Data</label>
+                          <Input value={loginRequestData} onChange={(e) => setLoginRequestData(e.target.value)} placeholder="email={%username%}&password={%password%}" />
+                          <p className="text-xs text-muted-foreground mt-1">Must include placeholders: {'{%username%}'} and {'{%password%}'}</p>
+                        </div>
+                        <div className="flex gap-3">
+                          <Button onClick={configureJsonAuth} disabled={!selectedInstanceId || !selectedContext || isConfiguringJsonAuth}>
+                            {isConfiguringJsonAuth ? (<><Loader2 size={16} className="mr-2 animate-spin"/> Configuring...</>) : (<><Settings size={16} className="mr-2"/> Configure JSON Auth</>)}
+                          </Button>
+                        </div>
+                        {jsonAuthStatus && (
+                          <div className={`p-3 rounded border ${
+                            jsonAuthStatus.type === 'success' ? 'bg-green-500/5 border-green-500/20 text-green-600' :
+                            jsonAuthStatus.type === 'error' ? 'bg-red-500/5 border-red-500/20 text-red-600' :
+                            'bg-blue-500/5 border-blue-500/20 text-blue-600'
+                          }`}>
+                            <p className="text-sm">{jsonAuthStatus.message}</p>
+                          </div>
+                        )}
+
+                        <div className="pt-2 border-t">
+                          <h5 className="font-medium text-sm mb-2">User Account</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                              <label className="text-sm font-medium">User Name (label)</label>
+                              <Input value={userName} onChange={(e) => setUserName(e.target.value)} placeholder="test-user" />
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium">Username</label>
+                              <Input value={userUsernameValue} onChange={(e) => setUserUsernameValue(e.target.value)} placeholder="tester@example.com" />
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium">Password</label>
+                              <Input type="password" value={userPasswordValue} onChange={(e) => setUserPasswordValue(e.target.value)} placeholder="••••••••" />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 mt-2">
+                            <div className="flex items-center gap-2">
+                              <Checkbox id="user-enabled" checked={userEnabled} onCheckedChange={(v) => setUserEnabled(!!v)} />
+                              <label htmlFor="user-enabled" className="text-sm">Enabled</label>
+                            </div>
+                            <Button onClick={createAuthUser} disabled={!selectedInstanceId || !selectedContext || isCreatingUser}>
+                              {isCreatingUser ? (<><Loader2 size={16} className="mr-2 animate-spin"/> Creating...</>) : (<><Power size={16} className="mr-2"/> Create User</>)}
+                            </Button>
+                            {createdUserId && (
+                              <Badge variant="outline" className="text-xs">user_id: {createdUserId}</Badge>
+                            )}
+                          </div>
+                          {userMgmtStatus && (
+                            <div className={`mt-2 p-3 rounded border ${
+                              userMgmtStatus.type === 'success' ? 'bg-green-500/5 border-green-500/20 text-green-600' :
+                              userMgmtStatus.type === 'error' ? 'bg-red-500/5 border-red-500/20 text-red-600' :
+                              'bg-blue-500/5 border-blue-500/20 text-blue-600'
+                            }`}>
+                              <p className="text-sm">{userMgmtStatus.message}</p>
+                            </div>
+                          )}
+
+                          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <Button onClick={runSpiderAsUser} disabled={!createdUserId || isAuthSpiderRunning}>
+                              {isAuthSpiderRunning ? (<><Loader2 size={16} className="mr-2 animate-spin"/> Spidering...</>) : (<><Search size={16} className="mr-2"/> Spider as User</>)}
+                            </Button>
+                            <Button variant="destructive" onClick={runActiveScanAsUser} disabled={!createdUserId || isAuthActiveScanRunning}>
+                              {isAuthActiveScanRunning ? (<><Loader2 size={16} className="mr-2 animate-spin"/> Scanning...</>) : (<><Bug size={16} className="mr-2"/> Active Scan as User</>)}
+                            </Button>
+                          </div>
+                          {authActionsStatus && (
+                            <div className={`mt-2 p-3 rounded border ${
+                              authActionsStatus.type === 'success' ? 'bg-green-500/5 border-green-500/20 text-green-600' :
+                              authActionsStatus.type === 'error' ? 'bg-red-500/5 border-red-500/20 text-red-600' :
+                              authActionsStatus.type === 'warning' ? 'bg-orange-500/5 border-orange-500/20 text-orange-600' :
+                              'bg-blue-500/5 border-blue-500/20 text-blue-600'
+                            }`}>
+                              <p className="text-sm">{authActionsStatus.message}</p>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </TabsContent>
+                </Tabs>
+                <p className="text-xs text-muted-foreground mt-2">Tip: For API keys, set header name to your API header (e.g., x-api-key) and use the key as the value. Scope the rule via URL regex to avoid external hosts.</p>
+              </div>
             </>
           )}
         </CardContent>
@@ -1143,6 +1602,25 @@ export function APIChecker({ domain }: APIDiscoveryProps) {
                         ))}
                       </div>
                     )}
+                    <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={disableAllScanners}
+                          disabled={
+                            isLoadingScanners ||
+                            isBulkDisabling ||
+                            scanners.length === 0 ||
+                            scanners.every(s => !s.enabled)
+                          }
+                        >
+                          {isBulkDisabling ? (
+                            <>
+                              <Loader2 size={14} className="mr-1 animate-spin" /> Disabling...
+                            </>
+                          ) : (
+                            'Disable All'
+                          )}
+                        </Button>
                   </div>
 
                   <Button
