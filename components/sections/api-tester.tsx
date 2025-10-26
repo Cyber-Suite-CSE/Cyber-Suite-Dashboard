@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useState, type ChangeEvent } from "react"
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Slider } from "@/components/ui/slider"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Upload, Search, Eye, EyeOff, Loader2, Play, RefreshCw } from "lucide-react"
+import { Upload, Search, Eye, EyeOff, Loader2, Play, RefreshCw, PlusCircle, Trash2 } from "lucide-react"
 
 interface APICheckerProps {
   domain: string
@@ -163,6 +163,11 @@ function backendAuthHeaders(): HeadersInit {
 }
 
 export function APIChecker({ domain }: APICheckerProps) {
+  // Session state (required by backend for most operations)
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [sessionDir, setSessionDir] = useState<string | null>(null)
+  const [sessionBusy, setSessionBusy] = useState<boolean>(false)
+
   // Target base URL (the API to scan)
   const [baseUrl, setBaseUrl] = useState<string>("")
 
@@ -198,6 +203,22 @@ export function APIChecker({ domain }: APICheckerProps) {
   const [isScanning, setIsScanning] = useState(false)
   const [scanReports, setScanReports] = useState<Array<{ key: string; request: any; report: ScanReport | null; error?: string }>>([])
 
+  // Restore session from localStorage (if present)
+  useEffect(() => {
+    try {
+      const saved = typeof window !== "undefined" ? window.localStorage.getItem("api_scanner_session") : null
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed?.session_id) {
+          setSessionId(parsed.session_id)
+          setSessionDir(parsed.dir || null)
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
   // Derived
   const filteredEndpoints = useMemo(() => {
     const q = endpointSearch.trim().toLowerCase()
@@ -215,7 +236,9 @@ export function APIChecker({ domain }: APICheckerProps) {
   const uploadSpec = useCallback(async (file: File) => {
     setUploading(true)
     try {
+      if (!sessionId) throw new Error("Create a session first")
       const form = new FormData()
+      form.append("session_id", sessionId)
       form.append("file", file)
       const res = await fetch(`${API_BASE}/api/v1/spec/upload`, {
         method: "POST",
@@ -235,10 +258,12 @@ export function APIChecker({ domain }: APICheckerProps) {
     } finally {
       setUploading(false)
     }
-  }, [auth])
+  }, [auth, sessionId])
 
   const fetchExtractedEndpoints = useCallback(async () => {
+    if (!sessionId) throw new Error("Create a session first")
     const params = new URLSearchParams()
+    params.set("session_id", sessionId)
     if (uploadedSpecName) params.set("file", uploadedSpecName)
     if (methodsFilter.length && methodsFilter.length < ALL_METHODS.length) {
       // Backend may accept comma-separated
@@ -281,7 +306,7 @@ export function APIChecker({ domain }: APICheckerProps) {
     const sel: Record<string, boolean> = {}
     unique.forEach((e) => (sel[`${e.method} ${e.path}`] = true))
     setSelectedEndpoints(sel)
-  }, [auth, methodsFilter, uploadedSpecName])
+  }, [auth, methodsFilter, uploadedSpecName, sessionId])
 
   // Auth Status Check
   const runAuthCheck = useCallback(async () => {
@@ -365,6 +390,7 @@ export function APIChecker({ domain }: APICheckerProps) {
         auth,
         rate_limit: rateLimit,
         timeout: timeoutSec,
+        session_id: sessionId,
       }
       const res = await fetch(`${API_BASE}/api/v1/scan/endpoint`, {
         method: "POST",
@@ -378,10 +404,11 @@ export function APIChecker({ domain }: APICheckerProps) {
       const data = (await res.json()) as any
       return normalizeReport(data)
     },
-    [auth, baseUrl, rateLimit, selectedTests, timeoutSec, uploadedSpecName]
+    [auth, baseUrl, rateLimit, selectedTests, timeoutSec, uploadedSpecName, sessionId]
   )
 
   const runFullScan = useCallback(async () => {
+    if (!sessionId) throw new Error("Create a session first")
     const selected = Object.entries(selectedEndpoints)
       .filter(([, v]) => v)
       .map(([k]) => {
@@ -395,14 +422,14 @@ export function APIChecker({ domain }: APICheckerProps) {
     const body: any = {
       base_url: baseUrl,
       endpoints: selected.length > 0 ? selected : undefined,
-      method: bulkMethod,
       selected_tests: selectedTestCodes,
       openapi_path: uploadedSpecName || null,
       auth,
       rate_limit: rateLimit,
       timeout: timeoutSec,
+      session_id: sessionId,
     }
-    const res = await fetch(`${API_BASE}/api/v1/scan/endpoint`, {
+    const res = await fetch(`${API_BASE}/api/v1/scan/full`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -413,7 +440,55 @@ export function APIChecker({ domain }: APICheckerProps) {
     if (!res.ok) throw new Error(`Full scan failed (${res.status})`)
     const data = (await res.json()) as any
     return normalizeReport(data)
-  }, [auth, baseUrl, rateLimit, selectedEndpoints, timeoutSec, uploadedSpecName])
+  }, [auth, baseUrl, rateLimit, selectedEndpoints, timeoutSec, uploadedSpecName, sessionId])
+
+  // ===== Session management =====
+  const createSession = useCallback(async () => {
+    setSessionBusy(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/sessions`, {
+        method: "POST",
+        headers: {
+          ...backendAuthHeaders(),
+        },
+      })
+      if (!res.ok) throw new Error(`Failed to create session (${res.status})`)
+      const data = (await res.json()) as { session_id: string; dir?: string }
+      setSessionId(data.session_id)
+      setSessionDir(data.dir || null)
+      try {
+        window.localStorage.setItem("api_scanner_session", JSON.stringify({ session_id: data.session_id, dir: data.dir || null }))
+      } catch {}
+    } finally {
+      setSessionBusy(false)
+    }
+  }, [])
+
+  const deleteSession = useCallback(async () => {
+    if (!sessionId) return
+    setSessionBusy(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}`, {
+        method: "DELETE",
+        headers: {
+          ...backendAuthHeaders(),
+        },
+      })
+      if (!res.ok) throw new Error(`Failed to delete session (${res.status})`)
+      // Clear session-scoped state
+      setSessionId(null)
+      setSessionDir(null)
+      setUploadedSpecName(null)
+      setEndpoints([])
+      setSelectedEndpoints({})
+      setScanReports([])
+      try {
+        window.localStorage.removeItem("api_scanner_session")
+      } catch {}
+    } finally {
+      setSessionBusy(false)
+    }
+  }, [sessionId])
 
   // ===== UI Actions =====
   const handleSelectAllVisible = (checked: boolean) => {
@@ -526,8 +601,37 @@ export function APIChecker({ domain }: APICheckerProps) {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Left column: Target + Auth + Spec */}
+        {/* Left column: Session + Target + Auth + Spec */}
         <div className="space-y-6 xl:col-span-1">
+          {/* Session Management */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Session</CardTitle>
+              <CardDescription>Create a session before uploading specs or scanning</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button className="gap-2" onClick={createSession} disabled={!!sessionId || sessionBusy}>
+                  {sessionBusy && !sessionId ? <Loader2 size={16} className="animate-spin" /> : <PlusCircle size={16} />}
+                  {sessionId ? "Session Active" : "Create Session"}
+                </Button>
+                <Button variant="destructive" className="gap-2" onClick={deleteSession} disabled={!sessionId || sessionBusy}>
+                  {sessionBusy && sessionId ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                  Delete Session
+                </Button>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {sessionId ? (
+                  <div className="space-y-1">
+                    <div><span className="font-medium text-foreground">ID:</span> <span className="font-mono break-all">{sessionId}</span></div>
+                    {sessionDir && <div><span className="font-medium text-foreground">Dir:</span> <span className="font-mono break-all">{sessionDir}</span></div>}
+                  </div>
+                ) : (
+                  <p>No session. Create one to start.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
           {/* Target API */}
           <Card>
             <CardHeader>
@@ -759,16 +863,17 @@ export function APIChecker({ domain }: APICheckerProps) {
                   className="hidden"
                   onChange={handleUploadInput}
                 />
-                <label htmlFor="openapi-upload" className="cursor-pointer block">
+                <label htmlFor="openapi-upload" className={`cursor-pointer block ${!sessionId ? "pointer-events-none opacity-60" : ""}`}>
                   <Upload size={24} className="mx-auto mb-2 text-accent" />
                   <p className="text-sm font-medium">
                     {uploadedSpecName ? uploadedSpecName : "Drag and drop or click to upload spec"}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">Max 10MB • JSON/YAML</p>
+                  {!sessionId && <p className="text-xs text-red-500 mt-2">Create a session to enable upload</p>}
                 </label>
               </div>
               <div className="flex gap-2">
-                <Button onClick={fetchExtractedEndpoints} variant="outline" disabled={uploading} className="gap-2">
+                <Button onClick={fetchExtractedEndpoints} variant="outline" disabled={uploading || !sessionId} className="gap-2">
                   {uploading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                   Load Endpoints
                 </Button>
@@ -940,7 +1045,7 @@ export function APIChecker({ domain }: APICheckerProps) {
                 <Button
                   className="gap-2"
                   onClick={scanSelectedEndpoints}
-                  disabled={isScanning || !baseUrl || filteredEndpoints.every((e) => !selectedEndpoints[`${e.method} ${e.path}`])}
+                  disabled={isScanning || !baseUrl || !sessionId || filteredEndpoints.every((e) => !selectedEndpoints[`${e.method} ${e.path}`])}
                 >
                   {isScanning ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
                   Scan Selected Endpoints
@@ -949,7 +1054,7 @@ export function APIChecker({ domain }: APICheckerProps) {
                   variant="outline"
                   className="gap-2"
                   onClick={scanFull}
-                  disabled={isScanning || !baseUrl}
+                  disabled={isScanning || !baseUrl || !sessionId}
                 >
                   {isScanning ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                   Full Scan (Backend Defaults)
