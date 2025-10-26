@@ -189,6 +189,9 @@ export function APIChecker({ domain }: APICheckerProps) {
   const [endpoints, setEndpoints] = useState<EndpointOperation[]>([])
   const [selectedEndpoints, setSelectedEndpoints] = useState<Record<string, boolean>>({})
   const [endpointSearch, setEndpointSearch] = useState("")
+  // Custom endpoint creator
+  const [customMethod, setCustomMethod] = useState<string>("GET")
+  const [customPath, setCustomPath] = useState<string>("")
 
   // Test selection
   const [selectedTests, setSelectedTests] = useState<string[]>([])
@@ -422,6 +425,7 @@ export function APIChecker({ domain }: APICheckerProps) {
     const body: any = {
       base_url: baseUrl,
       endpoints: selected.length > 0 ? selected : undefined,
+      method: bulkMethod,
       selected_tests: selectedTestCodes,
       openapi_path: uploadedSpecName || null,
       auth,
@@ -517,11 +521,36 @@ export function APIChecker({ domain }: APICheckerProps) {
     }
   }
 
+  const addCustomEndpoint = () => {
+    const method = (customMethod || "GET").toUpperCase()
+    let path = (customPath || "").trim()
+    if (!path) return
+    // Normalize: ensure relative path starts with '/'
+    const isAbsolute = /^(https?:)?\/\//i.test(path)
+    if (!isAbsolute && !path.startsWith("/")) {
+      path = "/" + path
+    }
+    const key = `${method} ${path}`
+    // Deduplicate
+    const exists = endpoints.some((e) => `${e.method} ${e.path}` === key)
+    if (exists) {
+      // Just ensure it's selected
+      setSelectedEndpoints((prev) => ({ ...prev, [key]: true }))
+      setCustomPath("")
+      return
+    }
+    const newEp: EndpointOperation = { method, path, summary: "Custom endpoint" }
+    setEndpoints((prev) => [...prev, newEp])
+    setSelectedEndpoints((prev) => ({ ...prev, [key]: true }))
+    setCustomPath("")
+  }
+
   const scanSelectedEndpoints = async () => {
     setIsScanning(true)
     setScanReports([])
     try {
-      const list = filteredEndpoints.filter((e) => selectedEndpoints[`${e.method} ${e.path}`])
+      // Always use all selected endpoints, regardless of current filters/search
+      const list = endpoints.filter((e) => selectedEndpoints[`${e.method} ${e.path}`])
       const results: Array<{ key: string; request: any; report: ScanReport | null; error?: string }> = []
       for (const ep of list) {
         const key = `${ep.method} ${ep.path}`
@@ -890,6 +919,43 @@ export function APIChecker({ domain }: APICheckerProps) {
               <CardDescription>Select which operations to test</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Add custom endpoint */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Method</label>
+                  <Select value={customMethod} onValueChange={(v) => setCustomMethod(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ALL_METHODS.map((m) => (
+                        <SelectItem key={`custom-m-${m}`} value={m}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="lg:col-span-2">
+                  <label className="text-sm font-medium mb-2 block">Endpoint Path or URL</label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="/users/{id} or https://api.example.com/users/1"
+                      value={customPath}
+                      onChange={(e) => setCustomPath(e.target.value)}
+                    />
+                    <Button
+                      className="whitespace-nowrap"
+                      onClick={addCustomEndpoint}
+                      disabled={!customPath.trim()}
+                    >
+                      <PlusCircle className="mr-2" size={16} /> Add Endpoint
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Adding an endpoint only updates the list; it doesn’t send any requests.</p>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                 <div className="lg:col-span-2">
                   <div className="relative">
@@ -1045,7 +1111,12 @@ export function APIChecker({ domain }: APICheckerProps) {
                 <Button
                   className="gap-2"
                   onClick={scanSelectedEndpoints}
-                  disabled={isScanning || !baseUrl || !sessionId || filteredEndpoints.every((e) => !selectedEndpoints[`${e.method} ${e.path}`])}
+                  disabled={
+                    isScanning ||
+                    !baseUrl ||
+                    !sessionId ||
+                    endpoints.every((e) => !selectedEndpoints[`${e.method} ${e.path}`])
+                  }
                 >
                   {isScanning ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
                   Scan Selected Endpoints
