@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Rocket, Monitor, History, Upload, Code } from "lucide-react"
-import { ScanResults } from "./scan-results"
+import { ScanResults } from "./database-scanner/scan-results"
 
 interface ScanConfig {
   domain: string
