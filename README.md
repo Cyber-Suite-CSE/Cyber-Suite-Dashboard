@@ -1,198 +1,69 @@
-# Cyber Suite Dashboard
+# CyberSuite: Offensive Security Web Domain Scanner
 
-A comprehensive Next.js security dashboard with multiple scanner tools including CVE scanner, code scanner, web domain scanner, API Test and database scanner.
+This project is a comprehensive web domain scanner consisting of a React/Next.js frontend and a Microservices-based backend running on Kubernetes.
 
-## Features
+## 📋 Prerequisites
 
-- 🔍 **CVE Scanner** - Scan for Common Vulnerabilities and Exposures
-- 💻 **Code Scanner** - Analyze source code for security issues
-- 🌐 **Web Domain Scanner** - Domain and web application security assessment
-- 🗄️ **Database Scanner** - Database security analysis
-- ⚙️ **API Tester** - Test and validate API endpoints
-- 📊 **Dashboard** - Centralized security monitoring interface
+- **Frontend**: Node.js (v18 or higher), npm
+- **Backend**: Kubernetes Cluster (e.g., Minikube), Docker, kubectl
 
-## 🚀 Getting Started
+## 🚀 Quick Start Guide
 
-### Prerequisites
+You need to run both the Frontend and the Backend for the full application to work.
 
-- **Node.js 22** or higher
-- **pnpm** package manager
-- **Docker** (optional, for containerized setup)
+### 1. Run the Backend (Kubernetes)
 
----
+The backend handles the scanning logic (Nmap, Katana, Wappalyzer).
 
-## 📦 Running Without Docker
+1.  Navigate to the backend directory:
+    ```bash
+    cd ../web-domain-scanner
+    ```
 
-### 1. Install Dependencies
+2.  Deploy to your Kubernetes cluster:
+    ```bash
+    # Apply configurations (Namespace, Redis, API Gateway, Workers)
+    kubectl apply -f k8s/base/namespace.yaml
+    kubectl apply -f k8s/base/redis.yaml
+    kubectl apply -f k8s/base/api-gateway.yaml
+    kubectl apply -f k8s/base/workers.yaml
+    ```
 
-```bash
-# Using pnpm (recommended)
-pnpm install
+3.  (Optional) Port Forwarding:
+    If you are running locally (Minikube) and the LoadBalancer is pending, port-forward the API Gateway:
+    ```bash
+    kubectl port-forward -n web-scanner svc/api-gateway 5000:80
+    ```
 
-# Or using npm
-npm install
-```
+### 2. Run the Frontend (Next.js)
 
-### 2. Development Server
+The frontend provides the dashboard for launching scans and viewing results.
 
-```bash
-# Start development server with hot reloads
-pnpm dev
+1.  Navigate to the dashboard directory:
+    ```bash
+    cd Cyber-Suite-Dashboard  # If starting from root, otherwise you are here.
+    ```
 
-# Or using npm
-npm run dev
-```
+2.  Install dependencies:
+    ```bash
+    npm install
+    ```
 
-**Access:** [http://localhost:3000](http://localhost:3000)
+3.  Start the development server:
+    ```bash
+    npm run dev
+    ```
 
-### 3. Production Build
-
-```bash
-# Build for production
-pnpm build
-
-# Start production server
-pnpm start
-
-# Or using npm
-npm run build
-npm start
-```
+4.  Access the Dashboard:
+    Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 🐳 Running With Docker
+## 🏗️ Project Architecture
 
-### Prerequisites for Docker
-
-- **Docker Desktop** installed and running
-- **Docker Compose** (included with Docker Desktop)
-
-### 🔧 Development with Docker (Hot Reloads)
-
-```bash
-# Start development container with hot reloads
-docker-compose up dev
-
-# Or build and start
-docker-compose up dev --build
-```
-
-**Features:**
-
-- ✅ Hot reloads enabled
-- ✅ Volume mounting for live code changes
-- ✅ Node.js 22 Alpine
-- ✅ Port: [http://localhost:3000](http://localhost:3000)
-
-**To stop:**
-
-```bash
-# Stop development container
-docker-compose down
-```
-
-### 🚀 Production with Docker (Nginx)
-
-```bash
-# Start production container with Nginx
-docker-compose up prod
-
-# Or build and start
-docker-compose up prod --build
-```
-
-**Features:**
-
-- Multi-stage build (Next.js + Nginx)
-- Static file serving with Nginx
-- Gzip compression enabled
-- Security headers configured
-- Optimized caching strategies
-- Port: [http://localhost:80](http://localhost:80)
-
-**To stop:**
-
-```bash
-# Stop production container
-docker-compose down
-```
-
----
-
-## 🛠️ Docker Commands Cheat Sheet
-
-### Individual Container Management
-
-**Development:**
-
-```bash
-# Build development image
-docker build -f Dockerfile.dev -t cyber-suite:dev .
-
-# Run development container
-docker run -p 3000:3000 -v .:/app -v /app/node_modules cyber-suite:dev
-```
-
-**Production:**
-
-```bash
-# Build production image
-docker build -f Dockerfile.prod -t cyber-suite:prod .
-
-# Run production container
-docker run -p 80:80 cyber-suite:prod
-```
-
-### Docker Compose Commands
-
-```bash
-# View logs
-docker-compose logs dev
-docker-compose logs prod
-
-# Rebuild containers
-docker-compose up --build
-
-# Run in background (detached)
-docker-compose up -d dev
-docker-compose up -d prod
-
-# Stop all containers
-docker-compose down
-
-# Remove containers and images
-docker-compose down --rmi all
-
-# View running containers
-docker-compose ps
-```
-
----
-
-## 🏗️ Docker Architecture
-
-### Development Setup (`Dockerfile.dev`)
-
-- **Base:** Node.js 22 Alpine
-- **Package Manager:** pnpm
-- **Hot Reloads:** Enabled with file polling
-- **Volume Mounting:** Source code mounted for live updates
-- **Port:** 3000
-
-### Production Setup (`Dockerfile.prod`)
-
-- **Stage 1:** Node.js 22 Alpine (Build stage)
-  - Builds Next.js static export
-- **Stage 2:** Nginx Alpine (Runtime stage)
-  - Serves static files
-  - Optimized for performance
-  - Security headers included
-- **Port:** 80
-
----
-
-### Production Issues
-
-- **Nginx errors:** Check `nginx.conf` configuration
-- **Build failures:** Ensure all dependencies are compatible with static export
+- **Cyber-Suite-Dashboard**: Next.js 14 App Router, React, Tailwind CSS.
+- **web-domain-scanner**: Python 3.11 Microservices (Flask/Gunicorn), Redis Queue, Docker.
+  - `api-gateway`: Orchestrates scans and manages state.
+  - `domain-enumeration`: Subdomain finding (Gobuster).
+  - `service-discovery`: Port scanning (Nmap).
+  - `web-analysis`: Crawling and tech detection (Katana, Wappalyzer).
