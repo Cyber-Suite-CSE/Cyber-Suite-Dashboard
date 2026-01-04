@@ -143,3 +143,15 @@
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-accent/80;
 }
+
+/* Force hide Next.js Dev Tools Indicator (The "N" icon) */
+[data-nextjs-toast],
+[data-nextjs-dev-tools-indicator],
+.nextjs-toast-errors-parent,
+nextjs-portal,
+#next-route-announcer {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

@@ -13,16 +13,10 @@ const nextConfig = {
   output: 'export',
   distDir: 'out',
   trailingSlash: true,
-  // Enable file watching for Docker development
-  webpack: (config, { dev }) => {
-    if (dev) {
-      config.watchOptions = {
-        poll: 1000,
-        aggregateTimeout: 300,
-      }
-    }
-    return config
-  },
+  transpilePackages: ['@react-pdf/renderer'],
+  experimental: {
+    esmExternals: 'loose'
+  }
 }
 
 export default nextConfig

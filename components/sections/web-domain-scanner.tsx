@@ -476,17 +476,17 @@ export function WebDomainScanner({ domain }: { domain: string }) {
           </AlertDescription>
         </Alert>
       ) : (
-        <Alert>
+        /* <Alert>
           <CheckCircle className="h-4 w-4 text-green-500" />
           <AlertTitle>Backend Connected</AlertTitle>
           <AlertDescription>
             Successfully connected to backend at localhost:5000
           </AlertDescription>
-        </Alert>
+        </Alert> */
+        null
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        `
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="new-scan" className="gap-2">
             <Rocket size={16} />
@@ -594,6 +594,7 @@ export function WebDomainScanner({ domain }: { domain: string }) {
             </Card>
 
             {/* Domain Enumeration */}
+            {scanConfig.modules.includes("domain_enumeration") && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -637,6 +638,7 @@ export function WebDomainScanner({ domain }: { domain: string }) {
                 </div>
               </CardContent>
             </Card>
+            )}
           </div>
 
           {/* Service Discovery */}
