@@ -1,4 +1,6 @@
-# Cyber Suite Dashboard
+# Project Vigilion
+
+Project Vigilion - Cyber Security Stream Students at Computer Science and Engineering Department, University of Moratuwa, Sri Lanka
 
 A comprehensive Next.js security dashboard with multiple scanner tools including CVE scanner, code scanner, web domain scanner, API Test and database scanner.
 
@@ -10,6 +12,14 @@ A comprehensive Next.js security dashboard with multiple scanner tools including
 - 🗄️ **Database Scanner** - Database security analysis
 - ⚙️ **API Tester** - Test and validate API endpoints
 - 📊 **Dashboard** - Centralized security monitoring interface
+
+## 🔐 Authentication
+
+This project uses a secure **API Gateway** pattern protected by JWT authentication via `middleware.ts`.
+
+- **Login Page**: `/login`
+- **Admin Email**: `admin@cybersec.cse`
+- **Default Password**: `CyberSec2025@C$E` (Update in `.env`)
 
 ## 🚀 Getting Started
 
@@ -128,20 +138,20 @@ docker-compose down
 
 ```bash
 # Build development image
-docker build -f Dockerfile.dev -t cyber-suite:dev .
+docker build -f Dockerfile.dev -t project-vigilion:dev .
 
 # Run development container
-docker run -p 3000:3000 -v .:/app -v /app/node_modules cyber-suite:dev
+docker run -p 3000:3000 -v .:/app -v /app/node_modules project-vigilion:dev
 ```
 
 **Production:**
 
 ```bash
 # Build production image
-docker build -f Dockerfile.prod -t cyber-suite:prod .
+docker build -f Dockerfile.prod -t project-vigilion:prod .
 
 # Run production container
-docker run -p 80:80 cyber-suite:prod
+docker run -p 80:80 project-vigilion:prod
 ```
 
 ### Docker Compose Commands

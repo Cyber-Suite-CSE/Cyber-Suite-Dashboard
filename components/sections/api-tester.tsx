@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Slider } from "@/components/ui/slider"
@@ -195,8 +194,7 @@ export function APIChecker({ domain }: APICheckerProps) {
 
   // Test selection
   const [selectedTests, setSelectedTests] = useState<string[]>([])
-  // Bulk method to use when scanning multiple endpoints (same method applies to all)
-  const [bulkMethod, setBulkMethod] = useState<string>("GET")
+
 
   // Execution config
   const [rateLimit, setRateLimit] = useState<number>(10)
@@ -425,7 +423,7 @@ export function APIChecker({ domain }: APICheckerProps) {
     const body: any = {
       base_url: baseUrl,
       endpoints: selected.length > 0 ? selected : undefined,
-      method: bulkMethod,
+      method: "GET",
       selected_tests: selectedTestCodes,
       openapi_path: uploadedSpecName || null,
       auth,
@@ -462,7 +460,7 @@ export function APIChecker({ domain }: APICheckerProps) {
       setSessionDir(data.dir || null)
       try {
         window.localStorage.setItem("api_scanner_session", JSON.stringify({ session_id: data.session_id, dir: data.dir || null }))
-      } catch {}
+      } catch { }
     } finally {
       setSessionBusy(false)
     }
@@ -488,7 +486,7 @@ export function APIChecker({ domain }: APICheckerProps) {
       setScanReports([])
       try {
         window.localStorage.removeItem("api_scanner_session")
-      } catch {}
+      } catch { }
     } finally {
       setSessionBusy(false)
     }
@@ -585,8 +583,8 @@ export function APIChecker({ domain }: APICheckerProps) {
     const findings = Array.isArray(data?.findings)
       ? data.findings.map((f: any) => normalizeFinding(f))
       : Array.isArray(data?.data?.findings)
-      ? data.data.findings.map((f: any) => normalizeFinding(f))
-      : []
+        ? data.data.findings.map((f: any) => normalizeFinding(f))
+        : []
 
     const scan_start = data?.scan_start || data?.started_at || new Date().toISOString()
     const scan_end = data?.scan_end || data?.finished_at || null
@@ -1074,7 +1072,7 @@ export function APIChecker({ domain }: APICheckerProps) {
               <CardDescription>Adjust performance and run scans</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="text-sm font-medium mb-3 block">Rate Limit (req/s): {rateLimit}</label>
                   <Slider value={[rateLimit]} onValueChange={(v) => setRateLimit(v[0])} min={1} max={100} step={1} />
@@ -1089,22 +1087,7 @@ export function APIChecker({ domain }: APICheckerProps) {
                     onChange={(e) => setTimeoutSec(Number(e.target.value || 30))}
                   />
                 </div>
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Bulk Method (multi-endpoint)</label>
-                  <Select value={bulkMethod} onValueChange={(v) => setBulkMethod(v)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ALL_METHODS.map((m) => (
-                        <SelectItem value={m} key={m}>
-                          {m}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-2">Used when sending multiple endpoints in one request.</p>
-                </div>
+                
               </div>
 
               <div className="flex flex-wrap gap-3">

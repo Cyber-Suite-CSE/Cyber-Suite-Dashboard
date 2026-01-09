@@ -33,9 +33,8 @@ export function Sidebar({ activeNav, onNavChange }: SidebarProps) {
 
       {/* Sidebar */}
       <aside
-        className={`${
-          isOpen ? "w-64" : "w-0"
-        } bg-sidebar border-r border-sidebar-border transition-all duration-300 flex flex-col overflow-hidden lg:w-64`}
+        className={`${isOpen ? "w-64" : "w-0"
+          } bg-sidebar border-r border-sidebar-border transition-all duration-300 flex flex-col overflow-hidden lg:w-64`}
       >
         {/* Logo */}
         <div className="p-6 border-b border-sidebar-border flex items-center gap-3">
@@ -43,8 +42,8 @@ export function Sidebar({ activeNav, onNavChange }: SidebarProps) {
             <Shield size={24} className="text-sidebar-primary-foreground" />
           </div>
           <div className="flex-1">
-            <h1 className="font-bold text-lg text-sidebar-foreground">SecSuite</h1>
-            <p className="text-xs text-sidebar-foreground/60">Offensive Security</p>
+            <h1 className="font-bold text-lg text-sidebar-foreground">Project Vigilion</h1>
+            <p className="text-xs text-sidebar-foreground/60">Cyber Security Stream</p>
           </div>
         </div>
 
@@ -60,11 +59,10 @@ export function Sidebar({ activeNav, onNavChange }: SidebarProps) {
                   onNavChange(item.id)
                   setIsOpen(false)
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                  isActive
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-lg"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent/10"
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${isActive
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-lg"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/10"
+                  }`}
               >
                 <Icon size={20} />
                 <span className="font-medium text-sm">{item.label}</span>
@@ -76,7 +74,7 @@ export function Sidebar({ activeNav, onNavChange }: SidebarProps) {
         {/* Footer */}
         <div className="p-4 border-t border-sidebar-border text-xs text-sidebar-foreground/60">
           <p>v1.0.0</p>
-          <p>© 2025 SecSuite</p>
+          <p suppressHydrationWarning>© {new Date().getFullYear()} Project Vigilion</p>
         </div>
       </aside>
 

@@ -7,12 +7,15 @@ import { ArrowLeft, Globe, Server, Code, Shield, Network, Lock } from "lucide-re
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
+import { JobStatus } from "@/lib/api-client"
+
 interface ScanResultsProps {
   data: any
+  jobInfo: JobStatus
   onBack: () => void
 }
 
-export function ScanResults({ data, onBack }: ScanResultsProps) {
+export function ScanResults({ data, jobInfo, onBack }: ScanResultsProps) {
   const domainEnum = data.modules?.domain_enumeration
   const serviceDiscovery = data.modules?.service_discovery
   const webAnalysis = data.modules?.web_analysis

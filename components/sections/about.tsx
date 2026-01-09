@@ -8,8 +8,8 @@ export function About() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">About SecSuite</h1>
-        <p className="text-muted-foreground">Professional Offensive Security Tool Suite</p>
+        <h1 className="text-3xl font-bold text-foreground mb-2">About Project Vigilion</h1>
+        <p className="text-muted-foreground">Cyber Security Stream Students at Computer Science and Engineering Department, University of Moratuwa, Sri Lanka</p>
       </div>
 
       {/* About Card */}
@@ -22,10 +22,10 @@ export function About() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <h3 className="font-semibold mb-2">SecSuite v1.0.0</h3>
+            <h3 className="font-semibold mb-2">Project Vigilion v1.0.0</h3>
             <p className="text-sm text-muted-foreground mb-4">
               A comprehensive offensive security tool suite designed for penetration testers, security researchers, and
-              red teams. SecSuite provides integrated scanning capabilities for web applications, APIs, databases, and
+              red teams. Project Vigilion provides integrated scanning capabilities for web applications, APIs, databases, and
               source code.
             </p>
           </div>
@@ -96,7 +96,7 @@ export function About() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            © 2025 SecSuite. All rights reserved. This tool is intended for authorized security testing only.
+            © 2025 Project Vigilion. All rights reserved. This tool is intended for authorized security testing only.
           </p>
         </CardContent>
       </Card>

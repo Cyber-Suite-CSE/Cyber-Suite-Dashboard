@@ -11,11 +11,11 @@ interface DashboardLayoutProps {
   activeNav: string
   onNavChange: (nav: string) => void
   userEmail: string
-  onLogout: () => void
+  // onLogout removed
   children: React.ReactNode
 }
 
-export function DashboardLayout({ activeNav, onNavChange, userEmail, onLogout, children }: DashboardLayoutProps) {
+export function DashboardLayout({ activeNav, onNavChange, userEmail, children }: DashboardLayoutProps) {
   const [domain, setDomain] = useState("")
   const [isExecuting, setIsExecuting] = useState(false)
 
@@ -35,7 +35,7 @@ export function DashboardLayout({ activeNav, onNavChange, userEmail, onLogout, c
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Bar with User Profile */}
-        <TopBar userEmail={userEmail} onLogout={onLogout} />
+        <TopBar userEmail={userEmail} />
 
         {/* Scan Bar (conditional) */}
         {showScanBar && (

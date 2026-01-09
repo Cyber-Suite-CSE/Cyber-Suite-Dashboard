@@ -7,10 +7,9 @@ import { useTheme } from "next-themes"
 
 interface TopBarProps {
   userEmail: string
-  onLogout: () => void
 }
 
-export function TopBar({ userEmail, onLogout }: TopBarProps) {
+export function TopBar({ userEmail }: TopBarProps) {
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
@@ -22,7 +21,7 @@ export function TopBar({ userEmail, onLogout }: TopBarProps) {
     return (
       <div className="h-16 border-b border-border bg-card flex items-center justify-between px-6">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Offensive Security Suite</h2>
+          <h2 className="text-lg font-semibold text-foreground">Project Vigilion</h2>
         </div>
       </div>
     )
@@ -32,7 +31,7 @@ export function TopBar({ userEmail, onLogout }: TopBarProps) {
     <div className="h-16 border-b border-border bg-card flex items-center justify-between px-6">
       {/* Left side - Title */}
       <div>
-        <h2 className="text-lg font-semibold text-foreground">Offensive Security Suite</h2>
+        <h2 className="text-lg font-semibold text-foreground">Project Vigilion</h2>
       </div>
 
       {/* Right side - User Profile & Actions */}
@@ -53,7 +52,7 @@ export function TopBar({ userEmail, onLogout }: TopBarProps) {
             <User size={16} className="text-accent-foreground" />
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-medium text-foreground">User</span>
+            <span className="text-sm font-medium text-foreground">CSE Admin</span>
             <span className="text-xs text-muted-foreground">{userEmail}</span>
           </div>
         </div>
@@ -62,7 +61,10 @@ export function TopBar({ userEmail, onLogout }: TopBarProps) {
         <Button
           variant="outline"
           size="sm"
-          onClick={onLogout}
+          onClick={async () => {
+            await fetch("/api/auth/logout", { method: "POST" })
+            window.location.reload()
+          }}
           className="gap-2 border-border hover:bg-accent hover:text-accent-foreground bg-transparent"
         >
           <LogOut size={16} />
