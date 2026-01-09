@@ -10,10 +10,10 @@ export async function middleware(req: NextRequest) {
   // Public paths that don't require authentication
   const isPublic = 
     pathname === "/login" ||
-    pathname === "/login/" || // Handle trailing slash
+    pathname.startsWith("/login/") || // Handle trailing slash explicitly
     pathname.startsWith("/_next") ||
     pathname.startsWith("/static") ||
-    pathname.includes(".") // Files like favicon.ico, etc.
+    pathname === "/favicon.ico"
 
   // Skip middleware for public paths
   if (isPublic) {

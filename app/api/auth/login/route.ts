@@ -1,31 +1,25 @@
 import { NextResponse } from "next/server"
 import { SignJWT } from "jose"
-import bcrypt from "bcryptjs"
 
+// Use environment variables or requested defaults
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL
-const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
 const JWT_SECRET = process.env.JWT_SECRET
 
 export async function POST(req: Request) {
   try {
     const { email, password } = await req.json()
 
-    console.log("LOGIN CHECK:");
-    console.log("Email:", email);
-    console.log("Expected Email:", ADMIN_EMAIL);
-    console.log("Password Length:", password?.length);
-    console.log("Hash Length:", ADMIN_PASSWORD_HASH?.length);
-    
-    // Explicit compare debug
-    const bcryptCheck = await bcrypt.compare(password, ADMIN_PASSWORD_HASH || "");
-    console.log("Bcrypt Check Result:", bcryptCheck);
+    console.log("LOGIN CHECK: Processing login request for:", email)
 
+    // Direct comparison as requested
     if (email !== ADMIN_EMAIL) {
+      console.log("LOGIN FAIL: Email mismatch")
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
     }
 
-    const isValid = await bcrypt.compare(password, ADMIN_PASSWORD_HASH!)
-    if (!isValid) {
+    if (password !== ADMIN_PASSWORD) {
+      console.log("LOGIN FAIL: Password mismatch")
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
     }
 
@@ -50,6 +44,7 @@ export async function POST(req: Request) {
 
     return response
   } catch (error) {
+    console.error("Login error:", error)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
