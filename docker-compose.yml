@@ -1,37 +1,22 @@
 services:
-  # Development service with hot reloads
-  dev:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    container_name: cyber-suite-dev
-    ports:
-      - "3000:3000"
-    volumes:
-      # Mount source code for hot reload
-      - .:/app
-      - /app/node_modules
-      - /app/.next
-    environment:
-      - NODE_ENV=development
-    networks:
-      - cyber-suite-network
-
-  # Production service with Nginx
-  prod:
+  app:
+    container_name: cyber-suite-app
     build:
       context: .
       dockerfile: Dockerfile.prod
-    container_name: cyber-suite-prod
+    restart: always
+    env_file:
+      - .env
+  
+  nginx:
+    container_name: cyber-suite-nginx
+    image: nginx:alpine
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./certs:/etc/nginx/certs
+    depends_on:
+      - app
     restart: always
-    networks:
-      - cyber-suite-network
-
-volumes:
-  node_modules:
-
-networks:
-  cyber-suite-network:
-    driver: bridge

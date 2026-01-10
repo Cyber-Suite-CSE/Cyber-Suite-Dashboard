@@ -10,7 +10,7 @@ const nextConfig = {
     unoptimized: true,
   },
   // Enable static export for production
-  // output: 'export',
+  output: 'standalone',
   // distDir: 'out',
   trailingSlash: true,
   // Enable file watching for Docker development
