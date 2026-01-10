@@ -130,7 +130,7 @@ const VULN_TESTS: VulnerabilityType[] = [
 ]
 
 // Backend base URL (configurable via env, defaults to localhost:8000)
-const API_BASE = (process.env.NEXT_PUBLIC_API_TESTER_BASE as string | undefined) || "http://localhost:8000"
+const API_BASE = (process.env.NEXT_PUBLIC_API_TESTER_BASE as string | undefined) || "/api/gateway/api-tester"
 // Backend bearer token (HTTPBearer). Set NEXT_PUBLIC_BACKEND_BEARER in env to authenticate UI->backend calls.
 const BACKEND_BEARER = (process.env.NEXT_PUBLIC_BACKEND_BEARER as string | undefined) || ""
 // Optional override for auth check path
@@ -619,12 +619,62 @@ export function APIChecker({ domain }: APICheckerProps) {
     }
   }
 
+  // Backend Health Check
+  const [backendHealth, setBackendHealth] = useState<"idle" | "checking" | "ok" | "error">("idle")
+
+  const checkHealth = useCallback(async () => {
+    setBackendHealth("checking")
+    console.log(`[Frontend] Checking API Tester health at: ${API_BASE}/health`)
+    try {
+      const controller = new AbortController()
+      const id = setTimeout(() => controller.abort(), 5000)
+      const res = await fetch(`${API_BASE}/health`, { signal: controller.signal })
+      clearTimeout(id)
+      console.log(`[Frontend] Health check response:`, res.status, res.statusText)
+
+      if (res.ok) {
+        setBackendHealth("ok")
+        console.log("[Frontend] Backend Connection Successful")
+      } else {
+        setBackendHealth("error")
+        console.error("[Frontend] Backend Error:", await res.text().catch(() => "No body"))
+      }
+    } catch (e: any) {
+      console.error("[Frontend] Connection Failed:", e.message)
+      setBackendHealth("error")
+    }
+  }, [])
+
+  useEffect(() => {
+    checkHealth()
+  }, [checkHealth])
+
   // ===== Render =====
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground mb-1">API Vulnerability Scanner</h1>
-        <p className="text-muted-foreground">Upload your OpenAPI spec, configure auth, choose endpoints and tests, then scan.</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground mb-1">API Vulnerability Scanner</h1>
+          <p className="text-muted-foreground">Upload your OpenAPI spec, configure auth, choose endpoints and tests, then scan.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {backendHealth === 'idle' && null}
+          {backendHealth === 'checking' && (
+            <Badge variant="outline" className="gap-2 py-1.5">
+              <Loader2 size={12} className="animate-spin" /> Connecting...
+            </Badge>
+          )}
+          {backendHealth === 'ok' && (
+            <Badge variant="outline" className="gap-2 py-1.5 border-green-500/50 text-green-600 bg-green-500/10">
+              <div className="w-2 h-2 rounded-full bg-green-600" /> Connected
+            </Badge>
+          )}
+          {backendHealth === 'error' && (
+            <Badge variant="destructive" className="gap-2 py-1.5 cursor-pointer hover:opacity-90" onClick={checkHealth}>
+              <RefreshCw size={12} /> Connection Failed (Retry)
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -1087,7 +1137,7 @@ export function APIChecker({ domain }: APICheckerProps) {
                     onChange={(e) => setTimeoutSec(Number(e.target.value || 30))}
                   />
                 </div>
-                
+
               </div>
 
               <div className="flex flex-wrap gap-3">
