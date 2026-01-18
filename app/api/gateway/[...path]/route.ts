@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 
 const SERVICES: Record<string, string | undefined> = {
-  "api-tester": process.env.API_TESTER_URL, 
+  "api-tester": process.env.API_TESTER_URL,
+  "web-scanner": process.env.WEB_SCANNER_URL,
   // Add other services here
 }
 
@@ -47,8 +48,9 @@ async function handleRequest(req: Request, paramsPromise: Promise<{ path: string
   let authHeader = req.headers.get('Authorization');
   if (!authHeader && serviceName === 'api-tester') {
       // Use env var or default. In prod, ensure this env var is set in Dockerfile/docker-compose
-      const token = process.env.API_AUTH_TOKEN || "secure-token-changeme"; 
-      authHeader = `Bearer ${token}`; 
+      const token = process.env.API_AUTH_TOKEN; 
+      if (!token) console.warn("API_AUTH_TOKEN not set");
+      authHeader = token ? `Bearer ${token}` : ""; 
   }
 
   try {
