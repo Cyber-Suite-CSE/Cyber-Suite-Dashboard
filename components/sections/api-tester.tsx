@@ -130,7 +130,7 @@ const VULN_TESTS: VulnerabilityType[] = [
 ]
 
 // Backend base URL (configurable via env, defaults to localhost:8000)
-const API_BASE = (process.env.NEXT_PUBLIC_API_TESTER_BASE as string | undefined) || "/api/gateway/api-tester"
+const API_BASE = (process.env.NEXT_PUBLIC_API_TESTER_BASE as string);
 // Backend bearer token (HTTPBearer). Set NEXT_PUBLIC_BACKEND_BEARER in env to authenticate UI->backend calls.
 const BACKEND_BEARER = (process.env.NEXT_PUBLIC_BACKEND_BEARER as string | undefined) || ""
 // Optional override for auth check path

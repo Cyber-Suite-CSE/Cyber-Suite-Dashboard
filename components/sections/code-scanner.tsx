@@ -22,7 +22,7 @@ export function CodeScanner({ domain }: CodeScannerProps) {
       const fetchCodeData = async () => {
         setIsLoading(true)
         try {
-          const apiUrl = process.env.NEXT_PUBLIC_CODE_SCANNER_API || "http://localhost:5004"
+          const apiUrl = process.env.NEXT_PUBLIC_CODE_SCANNER_API!
           const client = new APIClient(apiUrl)
           const response = await client.submitScan({ domain })
 

@@ -22,7 +22,7 @@ export function DatabaseScanner({ domain }: DatabaseScannerProps) {
       const fetchDatabaseData = async () => {
         setIsLoading(true)
         try {
-          const apiUrl = process.env.NEXT_PUBLIC_DATABASE_SCANNER_API || "http://localhost:5002"
+          const apiUrl = process.env.NEXT_PUBLIC_DATABASE_SCANNER_API!
           const client = new APIClient(apiUrl)
           const response = await client.submitScan({ domain })
 

@@ -57,10 +57,12 @@ export function WebDomainScanner({ domain }: { domain: string }) {
   const [activeTab, setActiveTab] = useState("new-scan");
   const [wordlistFile, setWordlistFile] = useState<File | null>(null);
   const [apiClient] = useState(
-    () =>
-      new APIClient(
-        process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000"
-      )
+    () => {
+      const apiBase = process.env.NEXT_PUBLIC_WEB_SCANNER_BASE;
+      if (!apiBase) console.error("NEXT_PUBLIC_WEB_SCANNER_BASE not set");
+      console.log("Web Domain Scanner API Base:", apiBase);
+      return new APIClient(apiBase || "");
+    }
   );
 
   // Backend connection state
@@ -137,7 +139,7 @@ export function WebDomainScanner({ domain }: { domain: string }) {
       toast.error("Backend connection failed", {
         description:
           result.error ||
-          "Please ensure the backend is running on localhost:5000",
+          "Please ensure the backend is running and accessible",
       });
     }
     setIsCheckingConnection(false);
@@ -451,7 +453,7 @@ export function WebDomainScanner({ domain }: { domain: string }) {
           <Loader2 className="h-4 w-4 animate-spin" />
           <AlertTitle>Connecting to Backend...</AlertTitle>
           <AlertDescription>
-            Checking backend health on localhost:5000
+            Checking backend health...
           </AlertDescription>
         </Alert>
       ) : !isConnected ? (
@@ -462,8 +464,7 @@ export function WebDomainScanner({ domain }: { domain: string }) {
             {connectionError || "Cannot connect to backend"}
             <br />
             <span className="text-xs mt-2 block">
-              Ensure the backend is running on localhost:5000 (Kubernetes
-              LoadBalancer)
+              Ensure the backend is running
             </span>
             <Button
               size="sm"
@@ -480,7 +481,7 @@ export function WebDomainScanner({ domain }: { domain: string }) {
           <CheckCircle className="h-4 w-4 text-green-500" />
           <AlertTitle>Backend Connected</AlertTitle>
           <AlertDescription>
-            Successfully connected to backend at localhost:5000
+            Successfully connected to backend
           </AlertDescription>
         </Alert>
       )}
@@ -559,8 +560,8 @@ export function WebDomainScanner({ domain }: { domain: string }) {
                               modules: checked
                                 ? [...prev.modules, module]
                                 : prev.modules.filter(
-                                    (m: string) => m !== module
-                                  ),
+                                  (m: string) => m !== module
+                                ),
                             }));
                           }}
                           id={module}
@@ -618,8 +619,8 @@ export function WebDomainScanner({ domain }: { domain: string }) {
                                 enumTechniques: checked
                                   ? [...prev.enumTechniques, tech]
                                   : prev.enumTechniques.filter(
-                                      (t: string) => t !== tech
-                                    ),
+                                    (t: string) => t !== tech
+                                  ),
                               }));
                             }}
                             id={tech}
@@ -1127,8 +1128,8 @@ export function WebDomainScanner({ domain }: { domain: string }) {
                             job.status === "completed"
                               ? "default"
                               : job.status === "failed"
-                              ? "destructive"
-                              : "secondary"
+                                ? "destructive"
+                                : "secondary"
                           }
                         >
                           {job.status.toUpperCase()}
