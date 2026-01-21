@@ -261,7 +261,9 @@ export function ScanResults({
     stoppedByUserRef.current = false;
 
     // ✅ Use absolute URL (and ensure no https/ws mismatch)
-    const ws = new WebSocket("ws://localhost:8000/v1/scan-stream");
+    const ws = new WebSocket(
+      `${process.env.NEXT_PUBLIC_DATABASE_SCANNER_WEB_SOCKET_URL}/v1/scan-stream`,
+    );
     wsRef.current = ws;
 
     const payload = {
