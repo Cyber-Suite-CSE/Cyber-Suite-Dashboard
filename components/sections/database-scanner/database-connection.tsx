@@ -118,7 +118,7 @@ export function DatabaseConnection({ onConnection }: DatabaseConnectionProps) {
             <Label htmlFor="host">Host</Label>
             <Input
               id="host"
-              placeholder="localhost"
+              placeholder="DB HOST"
               value={formData.host}
               onChange={(e) =>
                 setFormData({ ...formData, host: e.target.value })
@@ -129,7 +129,7 @@ export function DatabaseConnection({ onConnection }: DatabaseConnectionProps) {
             <Label htmlFor="port">Port</Label>
             <Input
               id="port"
-              placeholder={selectedDb === "mysql" ? "3306" : "5432"}
+              placeholder="PORT"
               value={formData.port}
               onChange={(e) =>
                 setFormData({ ...formData, port: e.target.value })
@@ -140,7 +140,7 @@ export function DatabaseConnection({ onConnection }: DatabaseConnectionProps) {
             <Label htmlFor="username">Username</Label>
             <Input
               id="username"
-              placeholder="root"
+              placeholder="USERNAME"
               value={formData.username}
               onChange={(e) =>
                 setFormData({ ...formData, username: e.target.value })
@@ -152,7 +152,7 @@ export function DatabaseConnection({ onConnection }: DatabaseConnectionProps) {
             <Input
               id="password"
               type="password"
-              placeholder="••••••••"
+              placeholder="PASSWORD"
               value={formData.password}
               onChange={(e) =>
                 setFormData({ ...formData, password: e.target.value })
@@ -163,7 +163,7 @@ export function DatabaseConnection({ onConnection }: DatabaseConnectionProps) {
             <Label htmlFor="database">Database Name</Label>
             <Input
               id="database"
-              placeholder="my_database"
+              placeholder="DATABASE"
               value={formData.database}
               onChange={(e) =>
                 setFormData({ ...formData, database: e.target.value })

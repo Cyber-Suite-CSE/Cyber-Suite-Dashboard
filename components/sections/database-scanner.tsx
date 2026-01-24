@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Database, Settings, BarChart3 } from "lucide-react";
 import { DatabaseConnection } from "./database-scanner/database-connection";
@@ -21,6 +21,11 @@ export function DatabaseScanner() {
   );
   const [runId, setRunId] = useState<string | null>(null);
   const [shouldAutoStart, setShouldAutoStart] = useState(false);
+
+  // Backend connection state
+  const [isBackendConnected, setIsBackendConnected] = useState(false);
+  const [backendError, setBackendError] = useState<string | null>(null);
+  const [isCheckingBackend, setIsCheckingBackend] = useState(true);
 
   const handleConnection = (status: ConnectionStatus, dbInfo?: any) => {
     setConnectionStatus(status);
@@ -84,8 +89,78 @@ export function DatabaseScanner() {
     setActiveTab("results");
   };
 
+  const checkBackendHealth = async () => {
+    setIsCheckingBackend(true);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_DATABASE_SCANNER_URL!;
+      // Ensure we don't have double slashes if base has one
+      const url = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+
+      const response = await fetch(url);
+      if (response.ok) {
+        setIsBackendConnected(true);
+        setBackendError(null);
+      } else {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+    } catch (error) {
+      console.error("Backend health check failed:", error);
+      setIsBackendConnected(false);
+      setBackendError(error instanceof Error ? error.message : "Connection failed");
+    } finally {
+      setIsCheckingBackend(false);
+    }
+  };
+
+  useEffect(() => {
+    checkBackendHealth();
+  }, []);
+
   return (
     <div className="space-y-6">
+      {/* Backend Connection Status */}
+      {isCheckingBackend ? (
+        <div className="p-4 rounded-lg border bg-card text-card-foreground shadow-sm flex items-center gap-3">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <div>
+            <h5 className="font-medium leading-none tracking-tight">Connecting to Backend...</h5>
+            <div className="text-sm text-muted-foreground mt-1">Checking scanner availability...</div>
+          </div>
+        </div>
+      ) : !isBackendConnected ? (
+        <div className="p-4 rounded-lg border border-destructive/50 bg-destructive/10 text-destructive dark:border-destructive flex items-start gap-3">
+          <div className="mt-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-alert-circle"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
+          </div>
+          <div className="flex-1">
+            <h5 className="font-medium leading-none tracking-tight">Backend Connection Failed</h5>
+            <div className="text-sm opacity-90 mt-1">
+              {backendError || "Cannot connect to database scanner service"}
+              <br />
+              <span className="text-xs mt-2 block opacity-75">
+                Ensure the Database Scanner container is running on port 8002
+              </span>
+            </div>
+            <button
+              onClick={checkBackendHealth}
+              className="mt-3 inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3"
+            >
+              Retry Connection
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 rounded-lg border bg-card text-card-foreground shadow-sm flex items-start gap-3">
+          <div className="mt-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-check-circle text-green-500"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+          </div>
+          <div>
+            <h5 className="font-medium leading-none tracking-tight">Backend Connected</h5>
+            <div className="text-sm text-muted-foreground mt-1">Database Scanner service is ready</div>
+          </div>
+        </div>
+      )}
+
       <div>
         <h1 className="text-3xl font-bold text-foreground mb-2">
           Database Scanner

@@ -305,8 +305,8 @@ export function ScanResults({
               idx === -1
                 ? [...prev, data]
                 : prev.map((i) =>
-                    i.check_id === data.check_id ? { ...i, ...data } : i,
-                  );
+                  i.check_id === data.check_id ? { ...i, ...data } : i,
+                );
           }
 
           const byCount = calcProgress(next.length);
@@ -365,7 +365,7 @@ export function ScanResults({
     ) {
       try {
         ws.close();
-      } catch {}
+      } catch { }
     }
     wsRef.current = null;
   };
