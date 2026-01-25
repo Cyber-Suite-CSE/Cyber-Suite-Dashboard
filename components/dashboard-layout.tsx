@@ -5,7 +5,7 @@ import React from "react"
 import { useState } from "react"
 import { Sidebar } from "./sidebar"
 import { TopBar } from "./top-bar"
-import { ScanBar } from "./scan-bar"
+
 
 interface DashboardLayoutProps {
   activeNav: string
@@ -16,16 +16,7 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ activeNav, onNavChange, userEmail, children }: DashboardLayoutProps) {
-  const [domain, setDomain] = useState("")
-  const [isExecuting, setIsExecuting] = useState(false)
 
-  const showScanBar = ["web-domain", "cve", "database", "api", "code"].includes(activeNav)
-
-  const handleExecute = () => {
-    setIsExecuting(true)
-    // Simulate execution
-    setTimeout(() => setIsExecuting(false), 2000)
-  }
 
   return (
     <div className="flex h-screen bg-background">
@@ -37,16 +28,11 @@ export function DashboardLayout({ activeNav, onNavChange, userEmail, children }:
         {/* Top Bar with User Profile */}
         <TopBar userEmail={userEmail} />
 
-        {/* Scan Bar (conditional) */}
-        {showScanBar && (
-          <ScanBar domain={domain} onDomainChange={setDomain} onExecute={handleExecute} isExecuting={isExecuting} />
-        )}
-
         {/* Main Content */}
         <main className="flex-1 overflow-auto">
           <div className="p-6">
             {React.isValidElement(children)
-              ? React.cloneElement(children as React.ReactElement<{ domain: string }>, { domain })
+              ? React.cloneElement(children as React.ReactElement)
               : children}
           </div>
         </main>

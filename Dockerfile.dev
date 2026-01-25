@@ -1,0 +1,15 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dependencies
+COPY package.json package-lock.json* pnpm-lock.yaml* ./
+RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN pnpm install
+
+# Build only if needed, but for dev we usually just copy and run
+# COPY . . 
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]

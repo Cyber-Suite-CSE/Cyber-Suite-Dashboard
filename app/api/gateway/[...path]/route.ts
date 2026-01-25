@@ -4,6 +4,7 @@ const SERVICES: Record<string, string | undefined> = {
   "api-tester": process.env.API_TESTER_URL,
   "web-scanner": process.env.WEB_SCANNER_URL,
   "database-scanner": process.env.DATABASE_SCANNER_URL,
+  "misconfig-checker": process.env.MISCONFIG_CHECKER_URL,
   // Add other services here
 }
 

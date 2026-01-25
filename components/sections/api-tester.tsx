@@ -161,7 +161,7 @@ function backendAuthHeaders(): HeadersInit {
   return headers
 }
 
-export function APIChecker({ domain }: APICheckerProps) {
+export function APIChecker() {
   // Session state (required by backend for most operations)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [sessionDir, setSessionDir] = useState<string | null>(null)

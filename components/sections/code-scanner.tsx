@@ -1,15 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Code, Loader2 } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Code, Loader2, Play } from "lucide-react"
 import { APIClient } from "@/lib/api-client"
 
-interface CodeScannerProps {
-  domain: string
-}
-
-export function CodeScanner({ domain }: CodeScannerProps) {
+export function CodeScanner() {
+  const [repoUrl, setRepoUrl] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [codeData, setCodeData] = useState<{ issues: number; critical: number; quality: string }>({
     issues: 0,
@@ -17,38 +16,50 @@ export function CodeScanner({ domain }: CodeScannerProps) {
     quality: "N/A",
   })
 
-  useEffect(() => {
-    if (domain) {
-      const fetchCodeData = async () => {
-        setIsLoading(true)
-        try {
-          const apiUrl = process.env.NEXT_PUBLIC_CODE_SCANNER_API!
-          const client = new APIClient(apiUrl)
-          const response = await client.submitScan({ domain })
+  // Start scan handler
+  const startScan = async () => {
+    if (!repoUrl) return
 
-          if (response.success && response.data) {
-            setCodeData({
-              issues: (response.data as any).total_issues || 0,
-              critical: (response.data as any).critical_count || 0,
-              quality: (response.data as any).quality_score || "N/A",
-            })
-          }
-        } catch (error) {
-          console.error("Error fetching code data:", error)
-        } finally {
-          setIsLoading(false)
-        }
+    setIsLoading(true)
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_CODE_SCANNER_API!
+      const client = new APIClient(apiUrl)
+      // Adjust payload key if backend expects 'domain' or 'repo_url'.
+      // Assuming current backend expects 'domain' as generic target key based on previous code.
+      const response = await client.submitScan({ domain: repoUrl })
+
+      if (response.success && response.data) {
+        setCodeData({
+          issues: (response.data as any).total_issues || 0,
+          critical: (response.data as any).critical_count || 0,
+          quality: (response.data as any).quality_score || "N/A",
+        })
       }
-
-      fetchCodeData()
+    } catch (error) {
+      console.error("Error fetching code data:", error)
+    } finally {
+      setIsLoading(false)
     }
-  }, [domain])
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-foreground mb-2">Code Scanner</h1>
         <p className="text-muted-foreground">Analyze source code for vulnerabilities</p>
+      </div>
+
+      <div className="flex gap-4 items-center bg-card p-4 rounded-lg border border-border">
+        <Input
+          placeholder="Enter GitHub Repository URL (e.g. https://github.com/user/repo)"
+          value={repoUrl}
+          onChange={(e) => setRepoUrl(e.target.value)}
+          className="flex-1"
+        />
+        <Button onClick={startScan} disabled={isLoading || !repoUrl}>
+          {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+          Start Scan
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -102,7 +113,7 @@ export function CodeScanner({ domain }: CodeScannerProps) {
         </CardHeader>
         <CardContent>
           <div className="text-center py-12 text-muted-foreground">
-            {domain ? <p>Scanning {domain} for code vulnerabilities...</p> : <p>Run a scan to analyze source code</p>}
+            {repoUrl ? <p>Results for {repoUrl} will appear here.</p> : <p>Run a scan to analyze source code</p>}
           </div>
         </CardContent>
       </Card>

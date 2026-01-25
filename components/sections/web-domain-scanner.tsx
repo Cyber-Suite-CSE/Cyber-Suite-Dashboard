@@ -53,7 +53,7 @@ interface ScanConfig {
   wordlistFile?: File;
 }
 
-export function WebDomainScanner({ domain }: { domain: string }) {
+export function WebDomainScanner() {
   const [activeTab, setActiveTab] = useState("new-scan");
   const [wordlistFile, setWordlistFile] = useState<File | null>(null);
   const [apiClient] = useState(
@@ -88,7 +88,7 @@ export function WebDomainScanner({ domain }: { domain: string }) {
 
   // Scan configuration (matching streamlit_ui.py defaults)
   const [scanConfig, setScanConfig] = useState<ScanConfig>({
-    domain: domain || "",
+    domain: "",
     modules: ["domain_enumeration", "service_discovery", "web_analysis"],
     verbose: true,
     enumTechniques: ["passive", "active", "dns", "fingerprinting"],

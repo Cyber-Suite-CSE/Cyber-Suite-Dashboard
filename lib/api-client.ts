@@ -39,6 +39,7 @@ export interface JobStatus {
   execution_time_seconds?: number;
   verbose_logs?: string[];
   results?: any;
+  scan_results?: any;
   error?: string;
   message?: string;
   created_at?: string;

@@ -3,14 +3,14 @@
 import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { WebDomainScanner } from "@/components/sections/web-domain-scanner"
-import { CVEScanner } from "@/components/sections/cve-scanner"
+import { MisconfigChecker } from "@/components/sections/misconfig-checker"
 import { DatabaseScanner } from "@/components/sections/database-scanner"
 import { APIChecker } from "@/components/sections/api-tester"
 import { CodeScanner } from "@/components/sections/code-scanner"
 import { Settings } from "@/components/sections/settings"
 import { About } from "@/components/sections/about"
 
-type NavigationItem = "web-domain" | "cve" | "database" | "api" | "code" | "settings" | "about"
+type NavigationItem = "web-domain" | "misconfig-checker" | "database" | "api" | "code" | "settings" | "about"
 
 export default function Home() {
   const [activeNav, setActiveNav] = useState<NavigationItem>("web-domain")
@@ -28,21 +28,21 @@ export default function Home() {
   const renderContent = () => {
     switch (activeNav) {
       case "web-domain":
-        return <WebDomainScanner domain={domain} />
-      case "cve":
-        return <CVEScanner domain={domain} />
+        return <WebDomainScanner />
+      case "misconfig-checker":
+        return <MisconfigChecker />
       case "database":
-        return <DatabaseScanner domain={domain} />
+        return <DatabaseScanner />
       case "api":
-        return <APIChecker domain={domain} />
+        return <APIChecker />
       case "code":
-        return <CodeScanner domain={domain} />
+        return <CodeScanner />
       case "settings":
         return <Settings />
       case "about":
         return <About />
       default:
-        return <WebDomainScanner domain={domain} />
+        return <WebDomainScanner />
     }
   }
 
