@@ -10,8 +10,8 @@ interface SidebarProps {
 
 const navItems = [
   { id: "web-domain", label: "Web Domain Scanner", icon: Globe },
-  { id: "misconfig-checker", label: "Misconfig Checker", icon: AlertTriangle },
   { id: "database", label: "Database Scanner", icon: Database },
+  { id: "misconfig-checker", label: "Misconfig Checker", icon: AlertTriangle },
   { id: "api", label: "API Tester", icon: Zap },
   { id: "code", label: "Code Scanner", icon: Code },
   { id: "settings", label: "Settings", icon: Settings },
