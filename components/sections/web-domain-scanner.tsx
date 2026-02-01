@@ -29,6 +29,7 @@ import {
   CheckCircle,
   Loader2,
 } from "lucide-react";
+import { ServiceStatusIndicator } from "@/components/service-status-indicator";
 import { ScanResults } from "./scan-results";
 import { APIClient, JobStatus } from "@/lib/api-client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -65,10 +66,11 @@ export function WebDomainScanner() {
     }
   );
 
+
   // Backend connection state
   const [isConnected, setIsConnected] = useState(false);
-  const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [isCheckingConnection, setIsCheckingConnection] = useState(true);
+  // const [connectionError, setConnectionError] = useState<string | null>(null);
+  // const [isCheckingConnection, setIsCheckingConnection] = useState(true);
 
   // Scan submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -103,11 +105,6 @@ export function WebDomainScanner() {
     disableAI: false,
   });
 
-  // Check backend health on mount
-  useEffect(() => {
-    checkBackendHealth();
-  }, []);
-
   // Auto-refresh jobs when monitoring
   useEffect(() => {
     if (activeTab === "monitor" && autoRefresh) {
@@ -125,25 +122,7 @@ export function WebDomainScanner() {
     }
   }, [activeTab]);
 
-  const checkBackendHealth = async () => {
-    setIsCheckingConnection(true);
-    const result = await apiClient.healthCheck();
 
-    if (result.success) {
-      setIsConnected(true);
-      setConnectionError(null);
-      toast.success("Connected to backend successfully");
-    } else {
-      setIsConnected(false);
-      setConnectionError(result.error || "Cannot connect to backend");
-      toast.error("Backend connection failed", {
-        description:
-          result.error ||
-          "Please ensure the backend is running and accessible",
-      });
-    }
-    setIsCheckingConnection(false);
-  };
 
   const loadJobs = async () => {
     setIsLoadingJobs(true);
@@ -447,44 +426,12 @@ export function WebDomainScanner() {
 
   return (
     <div className="space-y-6">
-      {/* Backend Connection Status */}
-      {isCheckingConnection ? (
-        <Alert>
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <AlertTitle>Connecting to Backend...</AlertTitle>
-          <AlertDescription>
-            Checking backend health...
-          </AlertDescription>
-        </Alert>
-      ) : !isConnected ? (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Backend Connection Failed</AlertTitle>
-          <AlertDescription>
-            {connectionError || "Cannot connect to backend"}
-            <br />
-            <span className="text-xs mt-2 block">
-              Ensure the backend is running
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-2"
-              onClick={checkBackendHealth}
-            >
-              Retry Connection
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : (
-        <Alert>
-          <CheckCircle className="h-4 w-4 text-green-500" />
-          <AlertTitle>Backend Connected</AlertTitle>
-          <AlertDescription>
-            Successfully connected to backend
-          </AlertDescription>
-        </Alert>
-      )}
+      <ServiceStatusIndicator
+        url={`${process.env.NEXT_PUBLIC_WEB_SCANNER_BASE}/api/health`}
+        serviceName="Web Domain Scanner"
+        variant="alert"
+        onStatusChange={setIsConnected}
+      />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         `

@@ -20,6 +20,7 @@ import {
   Server,
   Network
 } from "lucide-react"
+import { ServiceStatusIndicator } from "@/components/service-status-indicator"
 import { APIClient, type JobStatus } from "@/lib/api-client"
 
 export function MisconfigChecker() {
@@ -31,21 +32,8 @@ export function MisconfigChecker() {
   const [activeTab, setActiveTab] = useState("overview")
   const [stats, setStats] = useState({ critical: 0, high: 0, exploitable: 0 })
 
-  // Connection check
-  useEffect(() => {
-    const checkConnection = async () => {
-      try {
-        const client = new APIClient("/api/gateway/misconfig-checker")
-        const res = await client.healthCheck()
-        setIsConnected(res.success)
-      } catch (e) {
-        setIsConnected(false)
-      }
-    }
-    checkConnection()
-    const interval = setInterval(checkConnection, 30000)
-    return () => clearInterval(interval)
-  }, [])
+  // Connection check (handled by ServiceStatusIndicator)
+
 
   const startScan = async () => {
     if (!domain) return
@@ -126,17 +114,19 @@ export function MisconfigChecker() {
 
   return (
     <div className="space-y-6 h-full flex flex-col">
+      <ServiceStatusIndicator
+        url="/api/gateway/misconfig-checker/api/health"
+        serviceName="Misconfig Checker"
+        variant="alert"
+        checkInterval={30000}
+        onStatusChange={(online) => setIsConnected(online)}
+      />
+
       <div className="flex flex-col gap-4">
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
               Misconfig Checker
-              {isConnected !== null && (
-                <Badge variant={isConnected ? "default" : "destructive"} className="text-xs">
-                  {isConnected ? <CheckCircle2 className="w-3 h-3 mr-1" /> : <XCircle className="w-3 h-3 mr-1" />}
-                  {isConnected ? "Backend Connected" : "Backend Offline"}
-                </Badge>
-              )}
             </h1>
             <p className="text-muted-foreground">Comprehensive security scanning and misconfiguration detection</p>
           </div>

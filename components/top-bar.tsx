@@ -5,8 +5,6 @@ import { Button } from "@/components/ui/button"
 import { LogOut, Moon, Sun, User } from "lucide-react"
 import { useTheme } from "next-themes"
 
-import { BackendStatus } from "./backend-status"
-
 interface TopBarProps {
   userEmail: string
 }
@@ -35,7 +33,6 @@ export function TopBar({ userEmail }: TopBarProps) {
       <div className="flex items-center gap-4">
         <h2 className="text-lg font-semibold text-foreground">Project Vigilion</h2>
         <div className="hidden md:block w-px h-6 bg-border mx-2" />
-        <BackendStatus />
       </div>
 
       {/* Right side - User Profile & Actions */}

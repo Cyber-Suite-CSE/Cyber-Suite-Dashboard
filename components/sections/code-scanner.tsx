@@ -5,10 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Code, Loader2, Play } from "lucide-react"
+import { ServiceStatusIndicator } from "@/components/service-status-indicator"
 import { APIClient } from "@/lib/api-client"
 
 export function CodeScanner() {
   const [repoUrl, setRepoUrl] = useState("")
+  const [isConnected, setIsConnected] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [codeData, setCodeData] = useState<{ issues: number; critical: number; quality: string }>({
     issues: 0,
@@ -44,8 +46,17 @@ export function CodeScanner() {
 
   return (
     <div className="space-y-6">
+      <ServiceStatusIndicator
+        url={`${process.env.NEXT_PUBLIC_CODE_SCANNER_API}/api/health`}
+        serviceName="Code Scanner"
+        variant="alert"
+        onStatusChange={setIsConnected}
+      />
+
       <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">Code Scanner</h1>
+        <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
+          Code Scanner
+        </h1>
         <p className="text-muted-foreground">Analyze source code for vulnerabilities</p>
       </div>
 
@@ -56,7 +67,7 @@ export function CodeScanner() {
           onChange={(e) => setRepoUrl(e.target.value)}
           className="flex-1"
         />
-        <Button onClick={startScan} disabled={isLoading || !repoUrl}>
+        <Button onClick={startScan} disabled={isLoading || !repoUrl || !isConnected}>
           {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
           Start Scan
         </Button>

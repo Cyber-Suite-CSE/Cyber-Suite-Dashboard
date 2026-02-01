@@ -14,8 +14,7 @@ type NavigationItem = "web-domain" | "misconfig-checker" | "database" | "api" | 
 
 export default function Home() {
   const [activeNav, setActiveNav] = useState<NavigationItem>("web-domain")
-  const [userEmail, setUserEmail] = useState("admin@cybersec.cse")
-  const [domain, setDomain] = useState("")
+  const [userEmail, setUserEmail] = useState<string>("")
 
   useEffect(() => {
     // Simulate loading user email from session/auth
