@@ -1,0 +1,47 @@
+services:
+  # --- Infrastructure ---
+  
+  api-gateway:
+    build:
+      context: ../Cyber-Suite-API-Gateway
+      dockerfile: Dockerfile
+    container_name: cyber-suite-api-gateway
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./env/api-gateway/.env
+    networks:
+      - cyber-net
+
+  dashboard:
+    build: 
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: cyber-suite-dashboard
+    restart: unless-stopped
+    env_file:
+      - ./env/dashboard/.env
+    depends_on:
+      - api-gateway
+    networks:
+      - cyber-net
+
+  dashboard-nginx:
+    image: nginx:alpine
+    container_name: cyber-suite-dashboard-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./certs:/etc/nginx/certs
+    depends_on:
+      - dashboard
+    networks:
+      - cyber-net
+
+networks:
+  cyber-net:
+    driver: bridge
