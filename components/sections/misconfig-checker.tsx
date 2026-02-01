@@ -99,10 +99,10 @@ export function MisconfigChecker() {
 
   // Extract services from NMAP execution history
   const getDetectedServices = () => {
-    if (!jobStatus?.scan_results?.execution_history) return []
+    if (!jobStatus?.execution_history) return []
 
     const services: string[] = []
-    jobStatus.scan_results.execution_history.forEach((exec: any) => {
+    jobStatus.execution_history.forEach((exec: any) => {
       if (exec.agent === 'nmap' && exec.structured_data?.detected_services) {
         services.push(...exec.structured_data.detected_services)
       }
@@ -268,14 +268,14 @@ export function MisconfigChecker() {
 
             {activeTab === "logs" && (
               <ScrollArea className="h-full bg-black/90 text-green-400 p-4 rounded-md font-mono text-xs">
-                {jobStatus?.scan_results?.execution_history ? (
+                {jobStatus?.execution_history && jobStatus.execution_history.length > 0 ? (
                   <div className="space-y-4">
-                    {jobStatus.scan_results.execution_history.map((exec: any, i: number) => (
+                    {jobStatus.execution_history.map((exec: any, i: number) => (
                       <div key={i} className="border-b border-green-900/30 pb-2">
                         <div className="flex items-center gap-2 mb-1 text-green-300">
                           <Terminal size={12} />
                           <span className="font-bold">[{exec.agent.toUpperCase()}]</span>
-                          <span className="opacity-70">Step {i + 1}</span>
+                          <span className="opacity-70">Step {exec.step || i + 1}</span>
                         </div>
                         <div className="pl-5 text-green-400/80 font-bold">
                           {exec.task}
@@ -287,7 +287,9 @@ export function MisconfigChecker() {
                     ))}
                   </div>
                 ) : (
-                  <div className="opacity-50">Waiting for execution logs...</div>
+                  <div className="opacity-50">
+                    {jobStatus?.status === "running" ? "Waiting for execution logs..." : "No execution logs available"}
+                  </div>
                 )}
               </ScrollArea>
             )}

@@ -27,7 +27,7 @@ export interface ScanResponse {
 
 export interface JobStatus {
   job_id: string;
-  domain: string;
+  domain?: string;
   status: "pending" | "running" | "completed" | "failed";
   progress?: {
     percentage: number;
@@ -39,6 +39,14 @@ export interface JobStatus {
   execution_time_seconds?: number;
   verbose_logs?: string[];
   results?: any;
+  execution_history?: Array<{
+    agent: string;
+    task: string;
+    structured_data?: any;
+    raw_result?: string;
+    timestamp?: string;
+    step?: number;
+  }>;
   scan_results?: any;
   error?: string;
   message?: string;
