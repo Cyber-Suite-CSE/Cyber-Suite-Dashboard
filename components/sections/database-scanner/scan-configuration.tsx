@@ -216,9 +216,8 @@ export function ScanConfiguration({
           <input
             type={arg.type === "password" ? "password" : "text"}
             placeholder={arg.placeholder || ""}
-            className={`w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${
-              isMissing ? "border-destructive" : "border-border"
-            }`}
+            className={`w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${isMissing ? "border-destructive" : "border-border"
+              }`}
             value={value || ""}
             onChange={(e) => onChange(e.target.value)}
             required={arg.required}
@@ -433,11 +432,10 @@ export function ScanConfiguration({
             return (
               <div
                 key={test.id}
-                className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                  isSelected
-                    ? "border-primary bg-primary-muted"
-                    : "border-border hover:border-accent focus-within:border-accent"
-                }`}
+                className={`border rounded-lg p-4 cursor-pointer transition-colors ${isSelected
+                  ? "border-primary bg-primary-muted"
+                  : "border-border hover:border-accent focus-within:border-accent"
+                  }`}
                 tabIndex={0}
                 role="checkbox"
                 aria-checked={isSelected}

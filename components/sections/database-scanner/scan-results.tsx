@@ -260,10 +260,15 @@ export function ScanResults({
     setIsStopping(false);
     stoppedByUserRef.current = false;
 
-    // ✅ Use absolute URL (and ensure no https/ws mismatch)
-    const ws = new WebSocket(
-      `${process.env.NEXT_PUBLIC_DATABASE_SCANNER_WEB_SOCKET_URL}/v1/scan-stream`,
-    );
+    // ✅ Use dynamic URL (based on current location) to work on any domain
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const host = window.location.host;
+    // Derive WS path from the configured base URL (stripping possible /api prefix if needed, or just appending)
+    // Assuming NEXT_PUBLIC_DATABASE_SCANNER_URL is "/api/gateway/database-scanner"
+    const basePath = process.env.NEXT_PUBLIC_DATABASE_SCANNER_URL || "/api/gateway/database-scanner";
+    const wsUrl = `${protocol}//${host}${basePath}/ws/v1/scan-stream`;
+
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     const payload = {
