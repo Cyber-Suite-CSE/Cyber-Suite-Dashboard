@@ -126,6 +126,7 @@ export function MisconfigChecker() {
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
+              <AlertTriangle className="h-8 w-8 text-primary" />
               Misconfig Checker
             </h1>
             <p className="text-muted-foreground">Comprehensive security scanning and misconfiguration detection</p>

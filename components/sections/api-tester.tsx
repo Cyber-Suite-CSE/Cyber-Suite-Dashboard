@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Slider } from "@/components/ui/slider"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Upload, Search, Eye, EyeOff, Loader2, Play, RefreshCw, PlusCircle, Trash2 } from "lucide-react"
+import { Upload, Search, Eye, EyeOff, Loader2, Play, RefreshCw, PlusCircle, Trash2, Zap } from "lucide-react"
 import { ServiceStatusIndicator } from "@/components/service-status-indicator"
 
 interface APICheckerProps {
@@ -633,7 +633,10 @@ export function APIChecker() {
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-1">API Vulnerability Scanner</h1>
+          <h1 className="text-3xl font-bold text-foreground mb-1 flex items-center gap-3">
+            <Zap className="h-8 w-8 text-primary" />
+            API Vulnerability Scanner
+          </h1>
           <p className="text-muted-foreground">Upload your OpenAPI spec, configure auth, choose endpoints and tests, then scan.</p>
         </div>
       </div>

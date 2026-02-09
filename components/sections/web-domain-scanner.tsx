@@ -11,7 +11,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Slider } from "@/components/ui/slider";
+import { ShieldCheck, Globe } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -432,6 +432,16 @@ export function WebDomainScanner() {
         variant="alert"
         onStatusChange={setIsConnected}
       />
+
+      <div>
+        <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
+          <Globe className="h-8 w-8 text-primary" />
+          Web Domain Scanner
+        </h1>
+        <p className="text-muted-foreground">
+          Comprehensive domain reconnaissance and vulnerability scanning
+        </p>
+      </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         `

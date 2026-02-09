@@ -8,12 +8,12 @@ import { DatabaseScanner } from "@/components/sections/database-scanner"
 import { APIChecker } from "@/components/sections/api-tester"
 import { CodeScanner } from "@/components/sections/code-scanner"
 import { Settings } from "@/components/sections/settings"
-import { About } from "@/components/sections/about"
+import { Welcome } from "@/components/sections/welcome"
 
-type NavigationItem = "web-domain" | "misconfig-checker" | "database" | "api" | "code" | "settings" | "about"
+type NavigationItem = "welcome" | "web-domain" | "misconfig-checker" | "database" | "api" | "code" | "settings"
 
 export default function Home() {
-  const [activeNav, setActiveNav] = useState<NavigationItem>("web-domain")
+  const [activeNav, setActiveNav] = useState<NavigationItem>("welcome")
   const [userEmail, setUserEmail] = useState<string>("")
 
   useEffect(() => {
@@ -26,6 +26,8 @@ export default function Home() {
 
   const renderContent = () => {
     switch (activeNav) {
+      case "welcome":
+        return <Welcome onNavigate={(nav) => setActiveNav(nav as NavigationItem)} />
       case "web-domain":
         return <WebDomainScanner />
       case "misconfig-checker":
@@ -38,10 +40,8 @@ export default function Home() {
         return <CodeScanner />
       case "settings":
         return <Settings />
-      case "about":
-        return <About />
       default:
-        return <WebDomainScanner />
+        return <Welcome onNavigate={(nav) => setActiveNav(nav as NavigationItem)} />
     }
   }
 
