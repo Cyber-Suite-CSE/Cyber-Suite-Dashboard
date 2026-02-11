@@ -2,45 +2,134 @@
 
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Code, Loader2, Play } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ServiceStatusIndicator } from "@/components/service-status-indicator"
-import { APIClient } from "@/lib/api-client"
+import { APIClient } from "@/lib/api-client" // Keeping this if we need it later, but using direct fetch for now to match source
+import { Code } from "lucide-react"
+
+// Import migrated components
+import { SuccessResult } from "./code-scanner/success-result"
+import { ErrorMessage } from "./code-scanner/error-message"
+import { ZipUploadTab } from "./code-scanner/zip-upload-tab"
+import { GitHubRepoTab } from "./code-scanner/github-repo-tab"
+import { ApiResponse } from "./code-scanner/types"
 
 export function CodeScanner() {
-  const [repoUrl, setRepoUrl] = useState("")
   const [isConnected, setIsConnected] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [codeData, setCodeData] = useState<{ issues: number; critical: number; quality: string }>({
-    issues: 0,
-    critical: 0,
-    quality: "N/A",
-  })
+  const [isStartingAnalysis, setIsStartingAnalysis] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<ApiResponse | null>(null)
 
-  // Start scan handler
-  const startScan = async () => {
-    if (!repoUrl) return
+  // Use the API URL from environment variable
+  const getApiUrl = (path: string) => {
+    const apiBase = process.env.NEXT_PUBLIC_CODE_SCANNER_API || "http://localhost:3000"
+    // Remove trailing slash if present
+    const baseUrl = apiBase.endsWith('/') ? apiBase.slice(0, -1) : apiBase
+    // Add path with leading slash if missing
+    const relativePath = path.startsWith('/') ? path : `/${path}`
+    return `${baseUrl}${relativePath}`
+  }
 
+  const handleZipUpload = async (file: File) => {
     setIsLoading(true)
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_CODE_SCANNER_API!
-      const client = new APIClient(apiUrl)
-      // Adjust payload key if backend expects 'domain' or 'repo_url'.
-      // Assuming current backend expects 'domain' as generic target key based on previous code.
-      const response = await client.submitScan({ domain: repoUrl })
+    setError(null)
+    setResult(null)
 
-      if (response.success && response.data) {
-        setCodeData({
-          issues: (response.data as any).total_issues || 0,
-          critical: (response.data as any).critical_count || 0,
-          quality: (response.data as any).quality_score || "N/A",
-        })
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+
+      const response = await fetch(getApiUrl("/api/upload-zip"), {
+        method: "POST",
+        body: formData,
+      })
+
+      const data: ApiResponse = await response.json()
+
+      if (!data.success) {
+        setError(data.error || data.message || "Failed to process ZIP file")
+      } else {
+        setResult(data)
       }
-    } catch (error) {
-      console.error("Error fetching code data:", error)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An unexpected error occurred")
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleGitHubFetch = async (repoUrl: string, patToken?: string) => {
+    setIsLoading(true)
+    setError(null)
+    setResult(null)
+
+    try {
+      const response = await fetch(getApiUrl("/api/fetch-repo"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          repoUrl,
+          patToken,
+        }),
+      })
+
+      const data: ApiResponse = await response.json()
+
+      if (!data.success) {
+        setError(data.error || data.message || "Failed to fetch repository")
+      } else {
+        setResult(data)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An unexpected error occurred")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const resetState = () => {
+    setError(null)
+    setResult(null)
+  }
+
+  const handleStartAnalysis = async () => {
+    if (!result?.files || !result.framework) return
+
+    setIsStartingAnalysis(true)
+    setError(null)
+
+    try {
+      const response = await fetch(getApiUrl("/api/analyze"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          files: result.files,
+          framework: result.framework,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!data.success) {
+        setError(data.error || "Failed to start analysis")
+      } else {
+        // Redirect to task page or show success
+        // Since we are in the dashboard, we might want to just show a notification or redirect
+        // For now, let's just log it and maybe show a success message
+        console.log("Analysis started, job ID:", data.jobId)
+        // You might want to implement a router push here if you have a task view
+        // router.push(`/code-scanner/task/${data.jobId}`)
+        alert(`Analysis started! Job ID: ${data.jobId}`)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start analysis")
+    } finally {
+      setIsStartingAnalysis(false)
     }
   }
 
@@ -55,79 +144,57 @@ export function CodeScanner() {
 
       <div>
         <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
+          <Code className="h-8 w-8 text-primary" />
           Code Scanner
         </h1>
-        <p className="text-muted-foreground">Analyze source code for vulnerabilities</p>
+        <p className="text-muted-foreground">
+          AI-powered security analysis for your codebase
+        </p>
       </div>
 
-      <div className="flex gap-4 items-center bg-card p-4 rounded-lg border border-border">
-        <Input
-          placeholder="Enter GitHub Repository URL (e.g. https://github.com/user/repo)"
-          value={repoUrl}
-          onChange={(e) => setRepoUrl(e.target.value)}
-          className="flex-1"
+      {/* Success Result */}
+      {result && result.success && (
+        <SuccessResult
+          result={result}
+          isStartingAnalysis={isStartingAnalysis}
+          onStartAnalysis={handleStartAnalysis}
+          onReset={resetState}
         />
-        <Button onClick={startScan} disabled={isLoading || !repoUrl || !isConnected}>
-          {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-          Start Scan
-        </Button>
-      </div>
+      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Issues Found</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <div className="text-3xl font-bold">{codeData.issues}</div>
-              {isLoading && <Loader2 size={16} className="animate-spin text-muted-foreground" />}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Code vulnerabilities</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Critical</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <div className="text-3xl font-bold text-accent">{codeData.critical}</div>
-              {isLoading && <Loader2 size={16} className="animate-spin text-muted-foreground" />}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Severity issues</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Code Quality</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <div className="text-3xl font-bold text-green-500">{codeData.quality}</div>
-              {isLoading && <Loader2 size={16} className="animate-spin text-muted-foreground" />}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Score</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Error Message */}
+      {error && (
+        <ErrorMessage error={error} onDismiss={() => setError(null)} />
+      )}
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Code size={20} className="text-accent" />
-            Code Analysis Results
-          </CardTitle>
-          <CardDescription>SAST and dependency scanning results</CardDescription>
+          <CardTitle>Upload Your Codebase</CardTitle>
+          <CardDescription>
+            Choose how you want to provide your code for scanning
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-12 text-muted-foreground">
-            {repoUrl ? <p>Results for {repoUrl} will appear here.</p> : <p>Run a scan to analyze source code</p>}
-          </div>
+          <Tabs defaultValue="github" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsTrigger value="github">GitHub Repository</TabsTrigger>
+              <TabsTrigger value="zip">Upload ZIP File</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="zip" className="space-y-4">
+              <ZipUploadTab isLoading={isLoading} onUpload={handleZipUpload} />
+            </TabsContent>
+
+            <TabsContent value="github" className="space-y-4">
+              <GitHubRepoTab isLoading={isLoading} onFetch={handleGitHubFetch} />
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
+
+      <div className="text-center text-sm text-muted-foreground mt-8">
+        <p>Your code is analyzed securely and never stored permanently</p>
+      </div>
     </div>
   )
 }

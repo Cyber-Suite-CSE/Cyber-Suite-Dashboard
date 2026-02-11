@@ -100,12 +100,12 @@ export function DatabaseScanner() {
       />
 
       <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">
+        <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
+          <Database className="h-8 w-8 text-primary" />
           Database Scanner
         </h1>
         <p className="text-muted-foreground">
-          Discover and analyze database services with comprehensive security
-          testing
+          Discover and analyze database services with comprehensive security testing
         </p>
       </div>
 
