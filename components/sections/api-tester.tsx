@@ -599,6 +599,8 @@ export function APIChecker() {
         url={`${API_BASE}/health`}
         serviceName="API Tester"
         variant="alert"
+        checkInterval={30000}
+        onStatusChange={(online) => console.log("API Tester online:", online)}
       />
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

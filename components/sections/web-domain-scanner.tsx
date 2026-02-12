@@ -431,6 +431,7 @@ export function WebDomainScanner() {
         serviceName="Web Domain Scanner"
         variant="alert"
         onStatusChange={setIsConnected}
+        checkInterval={30000}
       />
 
       <div>

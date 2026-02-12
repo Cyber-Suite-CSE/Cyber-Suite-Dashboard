@@ -16,7 +16,7 @@ const navItems = [
   { id: "misconfig-checker", label: "Misconfig Checker", icon: AlertTriangle },
   { id: "api", label: "API Tester", icon: Zap },
   { id: "code", label: "Code Scanner", icon: Code },
-  { id: "settings", label: "Settings", icon: Settings },
+  // { id: "settings", label: "Settings", icon: Settings },
 ]
 
 export function Sidebar({ activeNav, onNavChange }: SidebarProps) {

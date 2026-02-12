@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ServiceStatusIndicator } from "@/components/service-status-indicator"
-import { APIClient } from "@/lib/api-client" // Keeping this if we need it later, but using direct fetch for now to match source
 import { Code } from "lucide-react"
 
 // Import migrated components
@@ -137,6 +136,7 @@ export function CodeScanner() {
         serviceName="Code Scanner"
         variant="alert"
         onStatusChange={setIsConnected}
+        checkInterval={30000}
       />
 
       <div>

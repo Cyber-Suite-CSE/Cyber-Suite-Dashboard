@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Database, Settings, BarChart3 } from "lucide-react";
 import { DatabaseConnection } from "./database-scanner/database-connection";
@@ -97,6 +97,8 @@ export function DatabaseScanner() {
         }
         serviceName="Database Scanner"
         variant="alert"
+        checkInterval={30000}
+        onStatusChange={(online) => console.log("Database Scanner online:", online)}
       />
 
       <div>

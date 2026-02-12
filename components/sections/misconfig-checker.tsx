@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -55,7 +55,7 @@ export function MisconfigChecker() {
     setJobsError(null)
 
     try {
-      const client = new APIClient("/api/gateway/misconfig-checker")
+      const client = new APIClient(String(process.env.NEXT_PUBLIC_MISCONFIG_CHECKER_API))
 
       const filters: any = {
         page,
@@ -112,7 +112,7 @@ export function MisconfigChecker() {
     setActiveTab("logs") // Auto-switch to logs on start
 
     try {
-      const client = new APIClient("/api/gateway/misconfig-checker")
+      const client = new APIClient(String(process.env.NEXT_PUBLIC_MISCONFIG_CHECKER_API))
       const response = await client.submitScan({ domain })
 
       if (response.success && response.job_id) {
@@ -179,7 +179,7 @@ export function MisconfigChecker() {
     setJobStatus(null)
     setStats({ critical: 0, high: 0, exploitable: 0 })
 
-    const client = new APIClient("/api/gateway/misconfig-checker")
+    const client = new APIClient(String(process.env.NEXT_PUBLIC_MISCONFIG_CHECKER_API))
     const result = await client.getJobStatus(job.job_id)
 
     if (result.success && result.data) {
@@ -256,16 +256,19 @@ export function MisconfigChecker() {
 
   const detectedServices = getDetectedServices()
 
+  const handleStatusChange = (online: boolean) => {
+    setIsConnected(online)
+  }
+
   return (
     <div className="space-y-6 h-full flex flex-col">
       <ServiceStatusIndicator
-        url="/api/gateway/misconfig-checker/api/health"
+        url={String(process.env.NEXT_PUBLIC_MISCONFIG_CHECKER_API) + "/api/health"}
         serviceName="Misconfig Checker"
         variant="alert"
+        onStatusChange={handleStatusChange}
         checkInterval={30000}
-        onStatusChange={(online) => setIsConnected(online)}
       />
-
       <div className="flex flex-col gap-4">
         <div className="flex justify-between items-start">
           <div>
@@ -389,8 +392,8 @@ export function MisconfigChecker() {
                               <Badge
                                 variant={
                                   job.status === "completed" ? "default" :
-                                  job.status === "failed" ? "destructive" :
-                                  job.status === "running" ? "secondary" : "outline"
+                                    job.status === "failed" ? "destructive" :
+                                      job.status === "running" ? "secondary" : "outline"
                                 }
                               >
                                 {job.status === "running" && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
@@ -462,8 +465,8 @@ export function MisconfigChecker() {
       {/* VIEW: Job Detail */}
       {viewMode === "detail" && (
         <>
-      {/* Stats Cards */}
-      {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Stats Cards */}
+          {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-card/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Critical Issues</CardTitle>
@@ -490,135 +493,135 @@ export function MisconfigChecker() {
         </Card>
       </div> */}
 
-      {/* Main Content Tabs */}
-      <Card className="flex-1 flex flex-col overflow-hidden">
-        <CardHeader className="pb-0">
-          <div className="flex items-center gap-4">
-            <Button onClick={handleBackToList} variant="outline" size="sm" className="gap-2">
-              <ArrowLeft size={16} />
-              Back to Jobs
-            </Button>
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList>
-                <TabsTrigger value="results">Results</TabsTrigger>
-                {/* <TabsTrigger value="services">Services <Badge variant="secondary" className="ml-2 text-[10px]">{detectedServices.length}</Badge></TabsTrigger>
+          {/* Main Content Tabs */}
+          <Card className="flex-1 flex flex-col overflow-hidden">
+            <CardHeader className="pb-0">
+              <div className="flex items-center gap-4">
+                <Button onClick={handleBackToList} variant="outline" size="sm" className="gap-2">
+                  <ArrowLeft size={16} />
+                  Back to Jobs
+                </Button>
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                  <TabsList>
+                    <TabsTrigger value="results">Results</TabsTrigger>
+                    {/* <TabsTrigger value="services">Services <Badge variant="secondary" className="ml-2 text-[10px]">{detectedServices.length}</Badge></TabsTrigger>
                 <TabsTrigger value="vulnerabilities">Vulnerabilities</TabsTrigger> */}
-                <TabsTrigger value="logs">Execution Log</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-        </CardHeader>
-        <CardContent className="flex-1 p-0 overflow-hidden">
+                    <TabsTrigger value="logs">Execution Log</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 p-0 overflow-hidden">
 
-          <div className="h-[500px] p-6">
+              <div className="h-[500px] p-6">
 
-            {activeTab === "results" && (
-              <ScrollArea className="h-full pr-4">
-                {jobStatus?.scan_results?.analysis || jobStatus?.scan_results?.response ? (
-                  <div className="prose dark:prose-invert max-w-none">
-                    <div className="p-4 bg-muted/30 rounded-lg border border-border mb-4">
-                      <h3 className="text-lg font-semibold mb-2">Scan Summary</h3>
-                      <div className="whitespace-pre-wrap font-sans text-sm">
-                        {jobStatus.scan_results.response || jobStatus.scan_results.analysis}
+                {activeTab === "results" && (
+                  <ScrollArea className="h-full pr-4">
+                    {jobStatus?.scan_results?.analysis || jobStatus?.scan_results?.response ? (
+                      <div className="prose dark:prose-invert max-w-none">
+                        <div className="p-4 bg-muted/30 rounded-lg border border-border mb-4">
+                          <h3 className="text-lg font-semibold mb-2">Scan Summary</h3>
+                          <div className="whitespace-pre-wrap font-sans text-sm">
+                            {jobStatus.scan_results.response || jobStatus.scan_results.analysis}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                    <ShieldCheck size={48} className="mb-4 opacity-20" />
-                    <p>No scan results available yet.</p>
-                  </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                        <ShieldCheck size={48} className="mb-4 opacity-20" />
+                        <p>No scan results available yet.</p>
+                      </div>
+                    )}
+                  </ScrollArea>
                 )}
-              </ScrollArea>
-            )}
 
-            {activeTab === "services" && (
-              <ScrollArea className="h-full pr-4">
-                {detectedServices.length > 0 ? (
-                <Table className="border rounded-lg overflow-hidden">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[100px]">Service</TableHead>
-                        <TableHead>Details</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {detectedServices.map((service, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              <Network size={16} className="text-blue-500" />
-                              <span className="capitalize">{service.split(' ')[0] || 'Unknown'}</span>
+                {activeTab === "services" && (
+                  <ScrollArea className="h-full pr-4">
+                    {detectedServices.length > 0 ? (
+                      <Table className="border rounded-lg overflow-hidden">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[100px]">Service</TableHead>
+                            <TableHead>Details</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {detectedServices.map((service, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="font-medium">
+                                <div className="flex items-center gap-2">
+                                  <Network size={16} className="text-blue-500" />
+                                  <span className="capitalize">{service.split(' ')[0] || 'Unknown'}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="font-mono text-xs">{service}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                        <Server size={48} className="mb-4 opacity-20" />
+                        <p>No open services detected yet.</p>
+                      </div>
+                    )}
+                  </ScrollArea>
+                )}
+
+                {activeTab === "vulnerabilities" && (
+                  <ScrollArea className="h-full pr-4">
+                    {jobStatus?.scan_results?.vulnerabilities?.vulnerability_details?.length ? (
+                      <div className="space-y-2">
+                        {jobStatus.scan_results.vulnerabilities.vulnerability_details.map((vuln: string, i: number) => (
+                          <Alert key={i} variant="default" className="border-l-4 border-l-red-500">
+                            <AlertTriangle className="h-4 w-4 text-red-500" />
+                            <AlertTitle className="text-sm font-semibold">Vulnerability Detected</AlertTitle>
+                            <AlertDescription className="text-xs font-mono mt-1">
+                              {vuln}
+                            </AlertDescription>
+                          </Alert>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                        <ShieldCheck size={48} className="mb-4 opacity-20" />
+                        <p>No vulnerabilities detected.</p>
+                      </div>
+                    )}
+                  </ScrollArea>
+                )}
+
+                {activeTab === "logs" && (
+                  <ScrollArea className="h-full bg-black/90 text-green-400 p-4 rounded-md font-mono text-xs">
+                    {jobStatus?.execution_history && jobStatus.execution_history.length > 0 ? (
+                      <div className="space-y-4">
+                        {jobStatus.execution_history.map((exec: any, i: number) => (
+                          <div key={i} className="border-b border-green-900/30 pb-2">
+                            <div className="flex items-center gap-2 mb-1 text-green-300">
+                              <Terminal size={12} />
+                              <span className="font-bold">[{exec.agent.toUpperCase()}]</span>
+                              <span className="opacity-70">Step {exec.step || i + 1}</span>
                             </div>
-                          </TableCell>
-                          <TableCell className="font-mono text-xs">{service}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                    <Server size={48} className="mb-4 opacity-20" />
-                    <p>No open services detected yet.</p>
-                  </div>
-                )}
-              </ScrollArea>
-            )}
-
-            {activeTab === "vulnerabilities" && (
-              <ScrollArea className="h-full pr-4">
-                {jobStatus?.scan_results?.vulnerabilities?.vulnerability_details?.length ? (
-                  <div className="space-y-2">
-                    {jobStatus.scan_results.vulnerabilities.vulnerability_details.map((vuln: string, i: number) => (
-                      <Alert key={i} variant="default" className="border-l-4 border-l-red-500">
-                        <AlertTriangle className="h-4 w-4 text-red-500" />
-                        <AlertTitle className="text-sm font-semibold">Vulnerability Detected</AlertTitle>
-                        <AlertDescription className="text-xs font-mono mt-1">
-                          {vuln}
-                        </AlertDescription>
-                      </Alert>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                    <ShieldCheck size={48} className="mb-4 opacity-20" />
-                    <p>No vulnerabilities detected.</p>
-                  </div>
-                )}
-              </ScrollArea>
-            )}
-
-            {activeTab === "logs" && (
-              <ScrollArea className="h-full bg-black/90 text-green-400 p-4 rounded-md font-mono text-xs">
-                {jobStatus?.execution_history && jobStatus.execution_history.length > 0 ? (
-                  <div className="space-y-4">
-                    {jobStatus.execution_history.map((exec: any, i: number) => (
-                      <div key={i} className="border-b border-green-900/30 pb-2">
-                        <div className="flex items-center gap-2 mb-1 text-green-300">
-                          <Terminal size={12} />
-                          <span className="font-bold">[{exec.agent.toUpperCase()}]</span>
-                          <span className="opacity-70">Step {exec.step || i + 1}</span>
-                        </div>
-                        <div className="pl-5 text-green-400/80 font-bold">
-                          {exec.task}
-                        </div>
-                        <div className="pl-5 mt-1 text-green-500/50">
-                          &gt; Execution successful
-                        </div>
+                            <div className="pl-5 text-green-400/80 font-bold">
+                              {exec.task}
+                            </div>
+                            <div className="pl-5 mt-1 text-green-500/50">
+                              &gt; Execution successful
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="opacity-50">
-                    {jobStatus?.status === "running" ? "Waiting for execution logs..." : "No execution logs available"}
-                  </div>
+                    ) : (
+                      <div className="opacity-50">
+                        {jobStatus?.status === "running" ? "Waiting for execution logs..." : "No execution logs available"}
+                      </div>
+                    )}
+                  </ScrollArea>
                 )}
-              </ScrollArea>
-            )}
 
-          </div>
-        </CardContent>
-      </Card>
+              </div>
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

@@ -10,7 +10,7 @@ import { CodeScanner } from "@/components/sections/code-scanner"
 import { Settings } from "@/components/sections/settings"
 import { Welcome } from "@/components/sections/welcome"
 
-type NavigationItem = "welcome" | "web-domain" | "misconfig-checker" | "database" | "api" | "code" | "settings"
+type NavigationItem = "welcome" | "web-domain" | "misconfig-checker" | "database" | "api" | "code"
 
 export default function Home() {
   const [activeNav, setActiveNav] = useState<NavigationItem>("welcome")
@@ -38,8 +38,8 @@ export default function Home() {
         return <APIChecker />
       case "code":
         return <CodeScanner />
-      case "settings":
-        return <Settings />
+      // case "settings":
+      //   return <Settings />
       default:
         return <Welcome onNavigate={(nav) => setActiveNav(nav as NavigationItem)} />
     }
