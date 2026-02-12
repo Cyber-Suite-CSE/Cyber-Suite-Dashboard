@@ -10,8 +10,7 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "Project Vigilion",
-  description: "Cyber Security Steam Students at Computer Science and Engineering Department, University of Moratuwa, Sri Lanka",
-  generator: "v0.app",
+  description: "Cyber Security Steam Students at Computer Science and Engineering Department, University of Moratuwa, Sri Lanka"
 }
 
 export default function RootLayout({

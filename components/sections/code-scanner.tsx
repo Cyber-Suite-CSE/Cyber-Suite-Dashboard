@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ServiceStatusIndicator } from "@/components/service-status-indicator"
@@ -15,15 +16,16 @@ import { GitHubRepoTab } from "./code-scanner/github-repo-tab"
 import { ApiResponse } from "./code-scanner/types"
 
 export function CodeScanner() {
+  const router = useRouter()
   const [isConnected, setIsConnected] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isStartingAnalysis, setIsStartingAnalysis] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ApiResponse | null>(null)
 
-  // Use the API URL from environment variable
+  // Use environment variable for API Gateway routing
   const getApiUrl = (path: string) => {
-    const apiBase = process.env.NEXT_PUBLIC_CODE_SCANNER_API || "http://localhost:3000"
+    const apiBase = String(process.env.NEXT_PUBLIC_CODE_SCANNER_API)
     // Remove trailing slash if present
     const baseUrl = apiBase.endsWith('/') ? apiBase.slice(0, -1) : apiBase
     // Add path with leading slash if missing
@@ -71,7 +73,7 @@ export function CodeScanner() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          repoUrl,
+          url: repoUrl,
           patToken,
         }),
       })
@@ -118,13 +120,8 @@ export function CodeScanner() {
       if (!data.success) {
         setError(data.error || "Failed to start analysis")
       } else {
-        // Redirect to task page or show success
-        // Since we are in the dashboard, we might want to just show a notification or redirect
-        // For now, let's just log it and maybe show a success message
-        console.log("Analysis started, job ID:", data.jobId)
-        // You might want to implement a router push here if you have a task view
-        // router.push(`/code-scanner/task/${data.jobId}`)
-        alert(`Analysis started! Job ID: ${data.jobId}`)
+        // Open task page in new tab
+        window.open(`/code-scanner/task/${data.jobId}`, '_blank')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start analysis")
@@ -136,7 +133,7 @@ export function CodeScanner() {
   return (
     <div className="space-y-6">
       <ServiceStatusIndicator
-        url={`${process.env.NEXT_PUBLIC_CODE_SCANNER_API}/api/health`}
+        url={getApiUrl("/api/health")}
         serviceName="Code Scanner"
         variant="alert"
         onStatusChange={setIsConnected}

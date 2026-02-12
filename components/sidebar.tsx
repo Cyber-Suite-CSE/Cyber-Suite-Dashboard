@@ -49,7 +49,7 @@ export function Sidebar({ activeNav, onNavChange }: SidebarProps) {
           </div>
           {!isCollapsed && (
             <div className="flex-1 overflow-hidden">
-              <h1 className="font-bold text-lg text-sidebar-foreground truncate">Project Vigilion</h1>
+              <h1 className="font-bold text-lg text-sidebar-foreground truncate">Cyber - CSE @ UoM</h1>
               <p className="text-xs text-muted-foreground truncate">Cyber Security Stream</p>
             </div>
           )}

@@ -108,7 +108,6 @@ const TEST_CODE_BY_LABEL: Record<string, string> = {
   "Information Disclosure": "INFO_DISCLOSURE",
   "Cross-Site Scripting": "XSS",
   "Missing Rate Limiting": "RATE_LIMIT",
-  // Best-effort mappings for labels without explicit examples
   "Authentication Bypass": "AUTH_BYPASS",
   "XML External Entity": "XXE",
   "Mass Assignment": "MASS_ASSIGNMENT",
@@ -130,37 +129,8 @@ const VULN_TESTS: VulnerabilityType[] = [
   "JWT Vulnerability",
 ]
 
-// Backend base URL (configurable via env, defaults to localhost:8000)
-const API_BASE = (process.env.NEXT_PUBLIC_API_TESTER_BASE as string);
-// Backend bearer token (HTTPBearer). Set NEXT_PUBLIC_BACKEND_BEARER in env to authenticate UI->backend calls.
-const BACKEND_BEARER = (process.env.NEXT_PUBLIC_BACKEND_BEARER as string | undefined) || ""
-// Optional override for auth check path
-const AUTH_CHECK_PATH = (process.env.NEXT_PUBLIC_AUTH_CHECK_PATH as string | undefined) || "/api/v1/auth/check"
-
-// Utility to build Authorization header from auth config
-function buildAuthHeaders(auth: AuthConfig | null | undefined): HeadersInit {
-  const headers: HeadersInit = {}
-  if (!auth) return headers
-
-  if (auth.auth_type === "bearer" && auth.token) {
-    const name = auth.header_name || "Authorization"
-    headers[name] = `Bearer ${auth.token}`
-  } else if (auth.auth_type === "basic" && auth.username && auth.password) {
-    const creds = btoa(`${auth.username}:${auth.password}`)
-    headers["Authorization"] = `Basic ${creds}`
-  } else if (auth.auth_type === "apikey" && auth.token) {
-    const name = auth.header_name || "Authorization"
-    headers[name] = auth.token
-  }
-  return headers
-}
-
-// Always-Bearer auth for backend calls
-function backendAuthHeaders(): HeadersInit {
-  const headers: HeadersInit = {}
-  if (BACKEND_BEARER) headers["Authorization"] = `Bearer ${BACKEND_BEARER}`
-  return headers
-}
+// Backend base URL
+const API_BASE = process.env.NEXT_PUBLIC_API_TESTER_BASE as string;
 
 export function APIChecker() {
   // Session state (required by backend for most operations)
@@ -245,7 +215,7 @@ export function APIChecker() {
       const res = await fetch(`${API_BASE}/api/v1/spec/upload`, {
         method: "POST",
         headers: {
-          ...backendAuthHeaders(),
+
         },
         body: form,
       })
@@ -273,7 +243,7 @@ export function APIChecker() {
     }
     const res = await fetch(`${API_BASE}/api/v1/spec/endpoints${params.toString() ? `?${params.toString()}` : ""}`, {
       headers: {
-        ...backendAuthHeaders(),
+
       },
     })
     if (!res.ok) throw new Error(`Failed to load endpoints (${res.status})`)
@@ -322,11 +292,11 @@ export function APIChecker() {
         auth,
         timeout: authCheckTimeout || 20,
       }
-      const res = await fetch(`${API_BASE}${AUTH_CHECK_PATH}`, {
+      const res = await fetch(`${API_BASE}/api/v1/auth/check`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...backendAuthHeaders(),
+
         },
         body: JSON.stringify(payload),
       })
@@ -377,7 +347,7 @@ export function APIChecker() {
     } finally {
       setAuthChecking(false)
     }
-  }, [API_BASE, AUTH_CHECK_PATH, baseUrl, authCheckEndpoint, authCheckMethod, authCheckTimeout, auth])
+  }, [API_BASE, baseUrl, authCheckEndpoint, authCheckMethod, authCheckTimeout, auth])
 
   const runEndpointScan = useCallback(
     async (endpoint: EndpointOperation) => {
@@ -398,7 +368,7 @@ export function APIChecker() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...backendAuthHeaders(),
+
         },
         body: JSON.stringify(body),
       })
@@ -436,7 +406,7 @@ export function APIChecker() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...backendAuthHeaders(),
+
       },
       body: JSON.stringify(body),
     })
@@ -452,7 +422,7 @@ export function APIChecker() {
       const res = await fetch(`${API_BASE}/api/v1/sessions`, {
         method: "POST",
         headers: {
-          ...backendAuthHeaders(),
+
         },
       })
       if (!res.ok) throw new Error(`Failed to create session (${res.status})`)
@@ -474,7 +444,7 @@ export function APIChecker() {
       const res = await fetch(`${API_BASE}/api/v1/sessions/${encodeURIComponent(sessionId)}`, {
         method: "DELETE",
         headers: {
-          ...backendAuthHeaders(),
+
         },
       })
       if (!res.ok) throw new Error(`Failed to delete session (${res.status})`)

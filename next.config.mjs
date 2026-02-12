@@ -1,14 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  images: {
-    unoptimized: true,
-  },
+
   // Enable static export for production
   output: 'standalone',
   // distDir: 'out',
@@ -22,6 +14,15 @@ const nextConfig = {
       }
     }
     return config
+  },
+  async rewrites() {
+    return [
+      // Proxy all /api requests to the API Gateway
+      {
+        source: '/api/:path*',
+        destination: `${process.env.API_GATEWAY_URL}/api/:path*`,
+      },
+    ]
   },
 }
 
