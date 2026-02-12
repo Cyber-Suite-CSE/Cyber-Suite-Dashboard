@@ -8,7 +8,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 RUN pnpm install
 
 # Build only if needed, but for dev we usually just copy and run
-# COPY . . 
+COPY . . 
 
 EXPOSE 3000
 
