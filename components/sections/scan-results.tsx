@@ -282,11 +282,15 @@ export function ScanResults({ data, jobInfo, onBack }: ScanResultsProps) {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
-                  {technologies.map((tech: string) => (
-                    <Badge key={tech} variant="outline" className="text-xs">
-                      {tech}
-                    </Badge>
-                  ))}
+                  {technologies.map((tech: any, idx: number) => {
+                    const name = typeof tech === 'string' ? tech : tech.name;
+                    const version = typeof tech === 'object' && tech.version ? ` ${tech.version}` : '';
+                    return (
+                      <Badge key={idx} variant="outline" className="text-xs">
+                        {name}{version}
+                      </Badge>
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>
