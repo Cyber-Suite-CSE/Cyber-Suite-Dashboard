@@ -55,6 +55,23 @@ export interface JobStatus {
   completed_at?: string;
 }
 
+export interface JobSummary {
+  job_id: string;
+  domain: string;
+  status: "pending" | "running" | "completed" | "failed";
+  created_at: string;
+  has_results: boolean;
+  error: string | null;
+}
+
+export interface PaginatedJobsResponse {
+  jobs: JobSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
 export class APIClient {
   private baseUrl: string;
   private timeout: number;
@@ -155,28 +172,41 @@ export class APIClient {
     }
   }
 
-  async listJobs(): Promise<ScanResponse> {
+  async listJobs(filters?: {
+    page?: number;
+    page_size?: number;
+    status?: string;
+    domain_search?: string;
+    date_from?: string;
+    date_to?: string;
+  }): Promise<ScanResponse> {
     try {
-      const response = await this.fetchWithTimeout(`${this.baseUrl}/api/jobs`);
+      const params = new URLSearchParams();
+
+      if (filters?.page) params.append("page", filters.page.toString());
+      if (filters?.page_size) params.append("page_size", filters.page_size.toString());
+      if (filters?.status) params.append("status", filters.status);
+      if (filters?.domain_search) params.append("domain_search", filters.domain_search);
+      if (filters?.date_from) params.append("date_from", filters.date_from);
+      if (filters?.date_to) params.append("date_to", filters.date_to);
+
+      const queryString = params.toString();
+      const url = `${this.baseUrl}/api/jobs${queryString ? `?${queryString}` : ""}`;
+
+      const response = await this.fetchWithTimeout(url);
 
       if (response.ok) {
         const result = await response.json();
-        // Handle both wrapped and direct response formats
-        let data = result.data || result;
-
-        // Ensure proper format
-        if (!data.jobs) {
-          data = {
-            jobs: result.jobs || [],
-            total_jobs: result.total_jobs || 0,
-          };
-        }
-
-        return { success: true, data };
+        return { success: true, data: result };
       } else {
-        return { success: false, error: "Failed to list jobs" };
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          success: false,
+          error: errorData.detail || errorData.error || "Failed to list jobs",
+        };
       }
     } catch (error) {
+      console.error("List jobs exception:", error);
       return { success: false, error: String(error) };
     }
   }

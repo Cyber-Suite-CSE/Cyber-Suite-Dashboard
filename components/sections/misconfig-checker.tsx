@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -15,13 +15,12 @@ import {
   ShieldCheck,
   Terminal,
   Play,
-  CheckCircle2,
-  XCircle,
   Server,
-  Network
+  Network,
+  ArrowLeft
 } from "lucide-react"
 import { ServiceStatusIndicator } from "@/components/service-status-indicator"
-import { APIClient, type JobStatus } from "@/lib/api-client"
+import { APIClient, type JobStatus, type JobSummary, type PaginatedJobsResponse } from "@/lib/api-client"
 
 export function MisconfigChecker() {
   const [domain, setDomain] = useState("")
@@ -29,10 +28,78 @@ export function MisconfigChecker() {
   const [isConnected, setIsConnected] = useState<boolean | null>(null)
   const [status, setStatus] = useState<string>("")
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null)
-  const [activeTab, setActiveTab] = useState("overview")
+  const [activeTab, setActiveTab] = useState("results")
   const [stats, setStats] = useState({ critical: 0, high: 0, exploitable: 0 })
 
+  const [viewMode, setViewMode] = useState<"list" | "detail">("list")
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
+
+  const [jobs, setJobs] = useState<JobSummary[]>([])
+  const [jobsLoading, setJobsLoading] = useState(false)
+  const [jobsError, setJobsError] = useState<string | null>(null)
+
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalJobs, setTotalJobs] = useState(0)
+
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [domainSearch, setDomainSearch] = useState("")
+
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
   // Connection check (handled by ServiceStatusIndicator)
+
+  const loadJobs = async (page: number = currentPage) => {
+    setJobsLoading(true)
+    setJobsError(null)
+
+    try {
+      const client = new APIClient("/api/gateway/misconfig-checker")
+
+      const filters: any = {
+        page,
+        page_size: pageSize,
+      }
+
+      if (statusFilter !== "all") {
+        filters.status = statusFilter
+      }
+
+      if (domainSearch.trim()) {
+        filters.domain_search = domainSearch.trim()
+      }
+
+      const result = await client.listJobs(filters)
+
+      if (result.success && result.data) {
+        const data = result.data as PaginatedJobsResponse
+        setJobs(data.jobs)
+        setCurrentPage(data.page)
+        setTotalPages(data.total_pages)
+        setTotalJobs(data.total)
+      } else {
+        setJobsError(result.error || "Failed to load jobs")
+      }
+    } catch (error) {
+      console.error("Error loading jobs:", error)
+      setJobsError(String(error))
+    } finally {
+      setJobsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadJobs()
+  }, [statusFilter, pageSize])
+
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+      }
+    }
+  }, [])
 
 
   const startScan = async () => {
@@ -49,6 +116,8 @@ export function MisconfigChecker() {
       const response = await client.submitScan({ domain })
 
       if (response.success && response.job_id) {
+        setSelectedJobId(response.job_id)
+        setViewMode("detail")
         setStatus("Scan in progress...")
         pollResults(client, response.job_id)
       } else {
@@ -63,7 +132,11 @@ export function MisconfigChecker() {
   }
 
   const pollResults = (client: APIClient, jobId: string) => {
-    const pollInterval = setInterval(async () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current)
+    }
+
+    const interval = setInterval(async () => {
       try {
         const result = await client.getJobStatus(jobId)
 
@@ -81,11 +154,12 @@ export function MisconfigChecker() {
           }
 
           if (data.status === "completed" || data.status === "failed") {
-            clearInterval(pollInterval)
+            clearInterval(interval)
+            pollIntervalRef.current = null
             setIsLoading(false)
             setStatus(data.status === "completed" ? "Scan complete" : "Scan failed")
             if (data.status === "completed") {
-              setActiveTab("overview") // Switch back to overview on success
+              setActiveTab("results") // Switch back to results on success
             }
           } else {
             setStatus(`Scanning... ${data.status}`)
@@ -95,6 +169,76 @@ export function MisconfigChecker() {
         console.error("Polling error:", e)
       }
     }, 2000)
+
+    pollIntervalRef.current = interval
+  }
+
+  const handleJobSelect = async (job: JobSummary) => {
+    setSelectedJobId(job.job_id)
+    setViewMode("detail")
+    setJobStatus(null)
+    setStats({ critical: 0, high: 0, exploitable: 0 })
+
+    const client = new APIClient("/api/gateway/misconfig-checker")
+    const result = await client.getJobStatus(job.job_id)
+
+    if (result.success && result.data) {
+      const data = result.data as JobStatus
+      setJobStatus(data)
+
+      if (data.scan_results) {
+        setStats({
+          critical: data.scan_results.critical_count || 0,
+          high: data.scan_results.high_count || 0,
+          exploitable: data.scan_results.exploitable_count || 0
+        })
+      }
+
+      if (data.status === "running" || data.status === "pending") {
+        setIsLoading(true)
+        setStatus("Monitoring scan...")
+        pollResults(client, job.job_id)
+      } else {
+        setIsLoading(false)
+        setStatus(data.status === "completed" ? "Scan completed" : "Scan failed")
+      }
+    }
+  }
+
+  const handleBackToList = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current)
+      pollIntervalRef.current = null
+    }
+
+    setSelectedJobId(null)
+    setViewMode("list")
+    setJobStatus(null)
+    setStats({ critical: 0, high: 0, exploitable: 0 })
+    setStatus("")
+    setActiveTab("results")
+
+    loadJobs()
+  }
+
+  const getPageNumbers = () => {
+    const pages: number[] = []
+    const maxVisiblePages = 5
+
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i)
+      }
+    } else {
+      const startPage = Math.max(1, currentPage - 2)
+      const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
+
+      for (let i = startPage; i <= endPage; i++) {
+        pages.push(i)
+      }
+    }
+
+    return pages
   }
 
   // Extract services from NMAP execution history
@@ -142,13 +286,184 @@ export function MisconfigChecker() {
           />
           <Button onClick={startScan} disabled={isLoading || !isConnected || !domain}>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-            {isLoading ? "Start Scan" : "Run New Scan"}
+            {isLoading ? "Scanning..." : "Run Scan"}
           </Button>
         </div>
       </div>
 
+      {/* VIEW: Jobs List */}
+      {viewMode === "list" && (
+        <>
+          {/* Unified Jobs Card */}
+          <Card>
+            <CardHeader className="space-y-4">
+              <div className="flex gap-4 items-center">
+                <Input
+                  placeholder="Search domains..."
+                  value={domainSearch}
+                  onChange={(e) => setDomainSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && loadJobs()}
+                  className="flex-1"
+                />
+                <Button onClick={() => loadJobs()} variant="outline">
+                  Search
+                </Button>
+              </div>
+
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-sm font-medium text-muted-foreground mr-2">Status:</span>
+                <Badge
+                  variant={statusFilter === "all" ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => setStatusFilter("all")}
+                >
+                  All ({totalJobs})
+                </Badge>
+                <Badge
+                  variant={statusFilter === "pending" ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => setStatusFilter("pending")}
+                >
+                  Pending
+                </Badge>
+                <Badge
+                  variant={statusFilter === "running" ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => setStatusFilter("running")}
+                >
+                  Running
+                </Badge>
+                <Badge
+                  variant={statusFilter === "completed" ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => setStatusFilter("completed")}
+                >
+                  Completed
+                </Badge>
+                <Badge
+                  variant={statusFilter === "failed" ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => setStatusFilter("failed")}
+                >
+                  Failed
+                </Badge>
+              </div>
+            </CardHeader>
+
+            <CardContent>
+              {jobsLoading ? (
+                <div className="flex items-center justify-center p-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : jobsError ? (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Error loading jobs</AlertTitle>
+                  <AlertDescription>{jobsError}</AlertDescription>
+                </Alert>
+              ) : jobs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-12">
+                  <ShieldCheck className="h-12 w-12 mb-4 text-muted-foreground opacity-20" />
+                  <p className="text-muted-foreground">No scan jobs found.</p>
+                </div>
+              ) : (
+                <div className="border border-border rounded-lg p-4">
+                  <div className="border border-background rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Domain</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Created</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {jobs.map((job) => (
+                          <TableRow
+                            key={job.job_id}
+                            className="cursor-pointer hover:bg-accent/50"
+                            onClick={() => handleJobSelect(job)}
+                          >
+                            <TableCell className="font-medium">{job.domain}</TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  job.status === "completed" ? "default" :
+                                  job.status === "failed" ? "destructive" :
+                                  job.status === "running" ? "secondary" : "outline"
+                                }
+                              >
+                                {job.status === "running" && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                                {job.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground text-sm">
+                              {new Date(job.created_at).toLocaleString()}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <Card className="bg-card/50">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-muted-foreground">
+                    Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalJobs)} of {totalJobs} jobs
+                  </div>
+
+                  <div className="flex gap-2 items-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => loadJobs(currentPage - 1)}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+
+                    <div className="flex gap-1">
+                      {getPageNumbers().map((pageNum) => (
+                        <Button
+                          key={pageNum}
+                          variant={pageNum === currentPage ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => loadJobs(pageNum)}
+                          className="w-10"
+                        >
+                          {pageNum}
+                        </Button>
+                      ))}
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => loadJobs(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+
+      {/* VIEW: Job Detail */}
+      {viewMode === "detail" && (
+        <>
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-card/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Critical Issues</CardTitle>
@@ -173,25 +488,31 @@ export function MisconfigChecker() {
             <div className="text-3xl font-bold text-yellow-500">{stats.exploitable}</div>
           </CardContent>
         </Card>
-      </div>
+      </div> */}
 
       {/* Main Content Tabs */}
       <Card className="flex-1 flex flex-col overflow-hidden">
         <CardHeader className="pb-0">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="services">Services <Badge variant="secondary" className="ml-2 text-[10px]">{detectedServices.length}</Badge></TabsTrigger>
-              <TabsTrigger value="vulnerabilities">Vulnerabilities</TabsTrigger>
-              <TabsTrigger value="logs">Execution Log</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="flex items-center gap-4">
+            <Button onClick={handleBackToList} variant="outline" size="sm" className="gap-2">
+              <ArrowLeft size={16} />
+              Back to Jobs
+            </Button>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList>
+                <TabsTrigger value="results">Results</TabsTrigger>
+                {/* <TabsTrigger value="services">Services <Badge variant="secondary" className="ml-2 text-[10px]">{detectedServices.length}</Badge></TabsTrigger>
+                <TabsTrigger value="vulnerabilities">Vulnerabilities</TabsTrigger> */}
+                <TabsTrigger value="logs">Execution Log</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </CardHeader>
         <CardContent className="flex-1 p-0 overflow-hidden">
 
           <div className="h-[500px] p-6">
 
-            {activeTab === "overview" && (
+            {activeTab === "results" && (
               <ScrollArea className="h-full pr-4">
                 {jobStatus?.scan_results?.analysis || jobStatus?.scan_results?.response ? (
                   <div className="prose dark:prose-invert max-w-none">
@@ -214,7 +535,7 @@ export function MisconfigChecker() {
             {activeTab === "services" && (
               <ScrollArea className="h-full pr-4">
                 {detectedServices.length > 0 ? (
-                  <Table>
+                <Table className="border rounded-lg overflow-hidden">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-[100px]">Service</TableHead>
@@ -298,6 +619,8 @@ export function MisconfigChecker() {
           </div>
         </CardContent>
       </Card>
+        </>
+      )}
     </div>
   )
 }
