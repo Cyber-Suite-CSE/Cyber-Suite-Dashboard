@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Globe, AlertTriangle, Database, Zap, Code, Settings, Menu, Shield, ChevronLeft, ChevronRight, Home } from "lucide-react"
+import { Globe, AlertTriangle, Database, Zap, Code, Settings, Menu, Shield, ChevronLeft, ChevronRight, Home, BookOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface SidebarProps {
@@ -16,6 +16,7 @@ const navItems = [
   { id: "misconfig-checker", label: "Misconfig Checker", icon: AlertTriangle },
   { id: "api", label: "API Tester", icon: Zap },
   { id: "code", label: "Code Scanner", icon: Code },
+  { id: "docs", label: "Documentation", icon: BookOpen },
   // { id: "settings", label: "Settings", icon: Settings },
 ]
 
@@ -64,6 +65,10 @@ export function Sidebar({ activeNav, onNavChange }: SidebarProps) {
               <button
                 key={item.id}
                 onClick={() => {
+                  if (item.id === "docs") {
+                    window.open("/docs/", "_blank")
+                    return
+                  }
                   onNavChange(item.id)
                   setIsOpen(false)
                 }}

@@ -74,7 +74,7 @@ export function Welcome({ onNavigate }: WelcomeProps) {
                         size="lg"
                         variant="ghost"
                         className="h-12 px-8 text-base rounded-full border border-primary/20 bg-primary/5 text-foreground hover:bg-primary hover:text-primary-foreground transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/25"
-                        onClick={() => window.open(String(process.env.NEXT_PUBLIC_GITHUB_URL), '_blank')}
+                        onClick={() => window.open('/docs/', '_blank')}
                     >
                         Read Documentation <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
