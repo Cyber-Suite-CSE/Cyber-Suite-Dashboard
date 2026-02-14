@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -105,43 +105,7 @@ export function WebDomainScanner() {
     disableAI: false,
   });
 
-  // Auto-refresh jobs when monitoring
-  useEffect(() => {
-    if (activeTab === "monitor" && autoRefresh) {
-      const interval = setInterval(() => {
-        refreshJobs();
-      }, 3000); // Refresh every 3 seconds
-      return () => clearInterval(interval);
-    }
-  }, [activeTab, autoRefresh]);
-
-  // Load jobs when switching to monitor or history tabs
-  useEffect(() => {
-    if (activeTab === "monitor" || activeTab === "history") {
-      loadJobs();
-    }
-  }, [activeTab]);
-
-
-
-  const loadJobs = async () => {
-    setIsLoadingJobs(true);
-    const result = await apiClient.listJobs();
-
-    if (result.success && result.data) {
-      const jobs = result.data.jobs || [];
-      setActiveJobs(
-        jobs.filter(
-          (job: JobStatus) =>
-            job.status === "running" || job.status === "pending"
-        )
-      );
-      setJobHistory(jobs);
-    }
-    setIsLoadingJobs(false);
-  };
-
-  const refreshJobs = async () => {
+  const refreshJobs = useCallback(async () => {
     const result = await apiClient.listJobs();
     console.log("Refreshing jobs:", result);
     if (result.success && result.data) {
@@ -201,7 +165,7 @@ export function WebDomainScanner() {
             description: `Job ${completedJob.job_id.slice(
               0,
               8
-            )}... has finished. Navigating to results...`,
+            )}... has finished. `,
           });
 
           // Automatically navigate to results if the job has results
@@ -212,8 +176,8 @@ export function WebDomainScanner() {
             );
             // Small delay to ensure the toast is visible before navigation
             setTimeout(() => {
-              setSelectedJob(completedJob);
-              console.log("Selected job set to:", completedJob.job_id);
+              // setSelectedJob(completedJob); // Don't auto-switch to results, let user stay on logs
+              console.log("Job completed:", completedJob.job_id);
             }, 1500);
           } else {
             // toast.info("Scan completed but no results available", {
@@ -235,17 +199,54 @@ export function WebDomainScanner() {
       setActiveJobs(newActiveJobs);
       setJobHistory(jobs);
 
-      // Update selected job if it's being monitored
+      // Update selected job if it's being monitored - fetch full details to get logs!
       if (selectedJob) {
-        const updatedJob = jobs.find(
-          (job: JobStatus) => job.job_id === selectedJob.job_id
-        );
-        if (updatedJob) {
-          setSelectedJob(updatedJob);
+        // We must fetch the full job status because listJobs returns only summaries (no logs)
+        const statusResult = await apiClient.getJobStatus(selectedJob.job_id);
+        if (statusResult.success && statusResult.data) {
+          setSelectedJob(statusResult.data);
         }
       }
     }
+  }, [
+    apiClient,
+    frontendJobTracker,
+    selectedJob
+  ]);
+
+  // Auto-refresh jobs when monitoring
+  useEffect(() => {
+    if (activeTab === "monitor" && autoRefresh) {
+      const interval = setInterval(() => {
+        refreshJobs();
+      }, 3000); // Refresh every 3 seconds
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, autoRefresh, refreshJobs]);
+
+  const loadJobs = async () => {
+    setIsLoadingJobs(true);
+    const result = await apiClient.listJobs();
+
+    if (result.success && result.data) {
+      const jobs = result.data.jobs || [];
+      setActiveJobs(
+        jobs.filter(
+          (job: JobStatus) =>
+            job.status === "running" || job.status === "pending"
+        )
+      );
+      setJobHistory(jobs);
+    }
+    setIsLoadingJobs(false);
   };
+
+  // Load jobs when switching to monitor or history tabs
+  useEffect(() => {
+    if (activeTab === "monitor" || activeTab === "history") {
+      loadJobs();
+    }
+  }, [activeTab]);
 
   const handleSubmitScan = async () => {
     if (!scanConfig.domain) {
@@ -1006,7 +1007,7 @@ export function WebDomainScanner() {
 
           {/* Selected Job Details */}
           {selectedJob &&
-            selectedJob.status === "running" &&
+            (selectedJob.status === "running" || selectedJob.status === "completed" || selectedJob.status === "failed") &&
             selectedJob.verbose_logs && (
               <Card>
                 <CardHeader>
