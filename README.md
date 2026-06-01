@@ -1,6 +1,6 @@
-# Cyber Suite Dashboard
+# Vigilion Dashboard
 
-The **Cyber Suite Dashboard** is the central user interface and API Gateway for the Cyber Suite CSE platform. Built with **Next.js**, it provides a unified experience for managing security scans, viewing results, and configuring the system.
+The **Vigilion Dashboard** is the central user interface and API Gateway for the Project Vigilion by CSE - Cyber at UoM platform. Built with **Next.js**, it provides a unified experience for managing security scans, viewing results, and configuring the system.
 
 ## Key Features
 
