@@ -8,9 +8,13 @@ export async function middleware(req: NextRequest) {
   const isPublic = 
     pathname === "/login" ||
     pathname.startsWith("/login/") || // Handle trailing slash explicitly
+    pathname === "/metrics" ||
+    pathname === "/metrics/" ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/static") ||
     pathname === "/favicon.ico"
+
+  console.log(`[Middleware Debug] pathname: ${pathname}, isPublic: ${isPublic}`);
 
   // Skip middleware for public paths
   if (isPublic) {
