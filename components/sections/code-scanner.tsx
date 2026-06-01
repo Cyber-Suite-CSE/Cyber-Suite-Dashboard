@@ -132,11 +132,10 @@ export function CodeScanner() {
   return (
     <div className="space-y-6">
       <ServiceStatusIndicator
-        url={getApiUrl("/api/health")}
+        serviceKey="codeScanner"
         serviceName="Code Scanner"
         variant="alert"
         onStatusChange={setIsConnected}
-        checkInterval={30000}
       />
 
       <div>

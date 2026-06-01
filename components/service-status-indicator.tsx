@@ -7,11 +7,14 @@ import { Button } from "@/components/ui/button"
 import { Loader2, RefreshCw, CheckCircle2, XCircle, AlertCircle } from "lucide-react"
 import { toast } from "sonner"
 
+import { useRef } from "react"
+import { useSuiteHealth, type ServiceKey } from "@/context/SuiteHealthContext"
+
 interface ServiceStatusIndicatorProps {
     /**
-     * The health check URL to probe.
+     * The health check service key.
      */
-    url: string
+    serviceKey: ServiceKey
     /**
      * Display name of the service (used in notifications and labels)
      */
@@ -23,62 +26,37 @@ interface ServiceStatusIndicatorProps {
      */
     variant?: "badge" | "alert"
     /**
-     * Check interval in milliseconds. Defaults to 0 (check once on mount).
-     */
-    checkInterval?: number
-    /**
      * Callback when status changes
      */
     onStatusChange?: (isOnline: boolean) => void
 }
 
 export function ServiceStatusIndicator({
-    url,
+    serviceKey,
     serviceName,
     variant = "badge",
-    checkInterval = 0,
     onStatusChange,
 }: ServiceStatusIndicatorProps) {
-    const [status, setStatus] = useState<"idle" | "checking" | "ok" | "error">("idle")
-    const [errorMessage, setErrorMessage] = useState<string | null>(null)
+    const { serviceHealth, checkHealth } = useSuiteHealth()
+    const { status, errorMessage } = serviceHealth[serviceKey]
 
-    const checkHealth = useCallback(async () => {
-        setStatus("checking")
-        try {
-            const controller = new AbortController()
-            const id = setTimeout(() => controller.abort(), 10000) // 10s timeout
-
-            const res = await fetch(url, { signal: controller.signal })
-            clearTimeout(id)
-
-            if (res.ok) {
-                setStatus("ok")
-                setErrorMessage(null)
-                onStatusChange?.(true)
-            } else {
-                throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-            }
-        } catch (e: any) {
-            console.error(`[${serviceName}] Health check failed:`, e)
-            setStatus("error")
-            setErrorMessage(e.message || "Connection failed")
-            onStatusChange?.(false)
-        }
-    }, [url, serviceName, onStatusChange])
-
-    // Initial check and interval
+    // Use a ref to capture the callback. This prevents effect re-trigger loops 
+    // when un-memoized inline callbacks are passed down from parents.
+    const onStatusChangeRef = useRef(onStatusChange)
     useEffect(() => {
-        checkHealth()
+        onStatusChangeRef.current = onStatusChange
+    }, [onStatusChange])
 
-        if (checkInterval > 0) {
-            const interval = setInterval(checkHealth, checkInterval)
-            return () => clearInterval(interval)
+    const isOnline = status === "ok"
+    useEffect(() => {
+        if (status !== "idle" && status !== "checking") {
+            onStatusChangeRef.current?.(isOnline)
         }
-    }, [checkHealth, checkInterval])
+    }, [status, isOnline])
 
     const handleRetry = (e: React.MouseEvent) => {
         e.stopPropagation()
-        checkHealth()
+        checkHealth(serviceKey)
         toast.info(`Retrying connection to ${serviceName}...`)
     }
 

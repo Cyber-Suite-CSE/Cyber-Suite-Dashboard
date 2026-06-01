@@ -90,14 +90,9 @@ export function DatabaseScanner() {
   return (
     <div className="space-y-6">
       <ServiceStatusIndicator
-        url={
-          process.env.NEXT_PUBLIC_DATABASE_SCANNER_URL?.endsWith("/")
-            ? process.env.NEXT_PUBLIC_DATABASE_SCANNER_URL
-            : `${process.env.NEXT_PUBLIC_DATABASE_SCANNER_URL}/`
-        }
+        serviceKey="databaseScanner"
         serviceName="Database Scanner"
         variant="alert"
-        checkInterval={30000}
         onStatusChange={(online) => console.log("Database Scanner online:", online)}
       />
 

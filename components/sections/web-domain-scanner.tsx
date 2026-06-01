@@ -428,11 +428,10 @@ export function WebDomainScanner() {
   return (
     <div className="space-y-6">
       <ServiceStatusIndicator
-        url={`${process.env.NEXT_PUBLIC_WEB_SCANNER_BASE}/api/health`}
+        serviceKey="webScanner"
         serviceName="Web Domain Scanner"
         variant="alert"
         onStatusChange={setIsConnected}
-        checkInterval={30000}
       />
 
       <div>

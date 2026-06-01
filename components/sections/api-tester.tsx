@@ -596,10 +596,9 @@ export function APIChecker() {
   return (
     <div className="space-y-6">
       <ServiceStatusIndicator
-        url={`${API_BASE}/health`}
+        serviceKey="apiTester"
         serviceName="API Tester"
         variant="alert"
-        checkInterval={30000}
         onStatusChange={(online) => console.log("API Tester online:", online)}
       />
 

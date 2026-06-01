@@ -263,11 +263,10 @@ export function MisconfigChecker() {
   return (
     <div className="space-y-6 h-full flex flex-col">
       <ServiceStatusIndicator
-        url={String(process.env.NEXT_PUBLIC_MISCONFIG_CHECKER_API) + "/api/health"}
+        serviceKey="misconfigChecker"
         serviceName="Misconfig Checker"
         variant="alert"
         onStatusChange={handleStatusChange}
-        checkInterval={30000}
       />
       <div className="flex flex-col gap-4">
         <div className="flex justify-between items-start">
