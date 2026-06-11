@@ -1,20 +1,27 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Lock, Mail, Eye, EyeOff } from "lucide-react"
+import { Lock, Mail, Eye, EyeOff, BookOpen, Sun, Moon } from "lucide-react"
+import { useTheme } from "next-themes"
 
 export default function LoginPage() {
     const router = useRouter()
+    const { theme, setTheme } = useTheme()
+    const [mounted, setMounted] = useState(false)
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
     const [showPassword, setShowPassword] = useState(false)
     const [error, setError] = useState("")
     const [loading, setLoading] = useState(false)
+
+    useEffect(() => {
+        setMounted(true)
+    }, [])
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -43,7 +50,29 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="min-h-screen flex items-center justify-center bg-background px-4 relative">
+            {/* Topbar Actions */}
+            <div className="absolute top-4 right-4 flex items-center gap-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open("/docs/", "_blank")}
+                    className="gap-2 border-border bg-transparent hover:bg-muted hover:text-foreground dark:hover:bg-muted dark:hover:text-foreground cursor-pointer"
+                >
+                    <BookOpen size={16} />
+                    Documentation
+                </Button>
+                <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                    className="rounded-lg border-border bg-transparent hover:bg-muted hover:text-foreground dark:hover:bg-muted dark:hover:text-foreground h-9 w-9 flex items-center justify-center cursor-pointer"
+                    aria-label="Toggle theme"
+                >
+                    {mounted ? (theme === "dark" ? <Sun size={18} /> : <Moon size={18} />) : <span className="h-[18px] w-[18px]" />}
+                </Button>
+            </div>
+
             <Card className="w-full max-w-md">
                 <CardHeader className="text-center">
                     <div className="flex justify-center mb-4">

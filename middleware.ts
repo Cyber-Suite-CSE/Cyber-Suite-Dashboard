@@ -10,6 +10,8 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/login/") || // Handle trailing slash explicitly
     pathname === "/metrics" ||
     pathname === "/metrics/" ||
+    pathname === "/docs" ||
+    pathname.startsWith("/docs/") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/static") ||
     pathname === "/favicon.ico"
