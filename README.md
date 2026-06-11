@@ -27,6 +27,8 @@ Key inputs include:
 *   `API_TESTER_URL`: Internal URL for the API Tester.
 *   `WEB_SCANNER_URL`: Internal URL for the Web Domain Scanner.
 
+* There is the env file added in the GitHub actions.
+
 ## Running Locally
 
 1.  **Install Dependencies**:
