@@ -2,15 +2,13 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { LogOut, Moon, Sun, User } from "lucide-react"
-import { useTheme } from "next-themes"
+import { LogOut, User } from "lucide-react"
 
 interface TopBarProps {
   userEmail: string
 }
 
 export function TopBar({ userEmail }: TopBarProps) {
-  const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -37,16 +35,6 @@ export function TopBar({ userEmail }: TopBarProps) {
 
       {/* Right side - User Profile & Actions */}
       <div className="flex items-center gap-4">
-        {/* Theme Toggle */}
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="rounded-lg border-border hover:bg-accent hover:text-accent-foreground"
-        >
-          {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
-        </Button>
-
         {/* User Profile */}
         <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-muted">
           <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center">

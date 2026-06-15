@@ -6,12 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Lock, Mail, Eye, EyeOff, BookOpen, Sun, Moon } from "lucide-react"
-import { useTheme } from "next-themes"
+import { Lock, Mail, Eye, EyeOff, BookOpen } from "lucide-react"
 
 export default function LoginPage() {
     const router = useRouter()
-    const { theme, setTheme } = useTheme()
     const [mounted, setMounted] = useState(false)
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
@@ -61,15 +59,6 @@ export default function LoginPage() {
                 >
                     <BookOpen size={16} />
                     Documentation
-                </Button>
-                <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                    className="rounded-lg border-border bg-transparent hover:bg-muted hover:text-foreground dark:hover:bg-muted dark:hover:text-foreground h-9 w-9 flex items-center justify-center cursor-pointer"
-                    aria-label="Toggle theme"
-                >
-                    {mounted ? (theme === "dark" ? <Sun size={18} /> : <Moon size={18} />) : <span className="h-[18px] w-[18px]" />}
                 </Button>
             </div>
 
@@ -132,7 +121,7 @@ export default function LoginPage() {
                             </div>
                         </div>
                     </CardContent>
-                    <CardFooter>
+                    <CardFooter className="pt-4">
                         <Button type="submit" className="w-full" disabled={loading}>
                             {loading ? "Signing in..." : "Sign In"}
                         </Button>
